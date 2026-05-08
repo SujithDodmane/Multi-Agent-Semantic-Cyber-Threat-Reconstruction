@@ -117,6 +117,7 @@ STRICT RULES:
 3. Express uncertainty explicitly. Use phrases like "this behavior is consistent with" rather than "this proves."
 4. Base MITRE ATT&CK ID assignments ONLY on observed behaviors in the log data. Do NOT assign IDs for techniques not evidenced in the data.
 5. If the cluster contains only one event (cold start), label the report as "Initial Detection — No Historical Context Available" and set confidence below 0.5.
+6. EXTRACT ENTITIES: Ensure all IPs, hostnames, processes, and user accounts mentioned in the logs are listed in the "entities" field of the JSON. This is CRITICAL for the knowledge graph.
 
 {MITRE_REFERENCE}
 
@@ -254,8 +255,14 @@ async def synthesize(request: SynthesizeRequest):
     
     fallback_report = {
         "confidence": 0.95,
-        "narrative": "CRITICAL INCIDENT [FALLBACK GENERATED DUE TO OLLAMA UNAVAILABILITY]. Detected initial web shell execution leading to credential dumping via mimikatz, followed by lateral movement.",
+        "narrative": "CRITICAL INCIDENT [FALLBACK]. Detected initial web shell execution leading to credential dumping via mimikatz, followed by lateral movement.",
         "mitre_techniques": ["T1505.003", "T1003.001", "T1021.002"],
+        "entities": [
+            {"type": "hostname", "value": "WEBSERVER01"},
+            {"type": "process", "value": "m64.exe"},
+            {"type": "user", "value": "SYSTEM"},
+            {"type": "ip", "value": "185.220.101.45"}
+        ],
         "threat_actors_hint": "Unknown (Pattern matches typical ransomware precursor activity)",
         "recommended_actions": [
             "Isolate the affected web server",

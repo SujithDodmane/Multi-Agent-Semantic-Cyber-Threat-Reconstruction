@@ -210,10 +210,7 @@ class ThreatGraph:
     def ingest_report(self, report: dict, severity: str = "P1") -> dict:
         """
         Ingest a ForensicReport and extract graph entities/edges.
-
-        Returns the delta (new/updated nodes and edges).
         """
-        # Severity → base score delta
         score_map = {"P0": 30.0, "P1": 20.0, "P2": 10.0}
         base_score = score_map.get(severity, 10.0)
 
@@ -221,7 +218,6 @@ class ThreatGraph:
         techniques = report.get("mitre_techniques", [])
         primary_technique = techniques[0] if techniques else ""
 
-        # Add entity nodes
         entity_nodes = []
         for entity in entities:
             etype = entity.get("type", "unknown")
@@ -230,7 +226,6 @@ class ThreatGraph:
                 self.add_node(etype, value, score_delta=base_score)
                 entity_nodes.append((etype, value))
 
-        # Create edges between related entities
         for i, (t1, v1) in enumerate(entity_nodes):
             for t2, v2 in entity_nodes[i + 1:]:
                 self.add_edge(
@@ -238,8 +233,42 @@ class ThreatGraph:
                     edge_type=_infer_edge_type(t1, t2),
                     mitre_technique_id=primary_technique,
                 )
+        return self.get_delta()
 
-        # Return delta
+    def ingest_raw_log(self, entry: dict) -> dict:
+        """
+        Extract entities from a raw normalized log entry and update the graph.
+        """
+        hostname = entry.get("hostname")
+        source_ip = entry.get("source_ip")
+        dest_ip = entry.get("dest_ip")
+        process_name = entry.get("process_name")
+        user_account = entry.get("user_account")
+        
+        entities = []
+        if hostname and hostname != "unknown_host":
+            entities.append(("hostname", hostname))
+        if source_ip and source_ip != "unknown":
+            entities.append(("ip", source_ip))
+        if dest_ip and dest_ip != "unknown":
+            entities.append(("ip", dest_ip))
+        if process_name and process_name != "unknown":
+            entities.append(("process", process_name))
+        if user_account and user_account != "unknown":
+            entities.append(("user", user_account))
+
+        for etype, evalue in entities:
+            self.add_node(etype, evalue, score_delta=5.0)
+
+        if hostname and source_ip:
+            self.add_edge("hostname", hostname, "ip", source_ip, edge_type="has_interface")
+        if process_name and hostname:
+            self.add_edge("process", process_name, "hostname", hostname, edge_type="executed_on")
+        if user_account and process_name:
+            self.add_edge("user", user_account, "process", process_name, edge_type="launched")
+        if source_ip and dest_ip:
+            self.add_edge("ip", source_ip, "ip", dest_ip, edge_type="network_connection")
+
         return self.get_delta()
 
     def get_delta(self) -> dict:

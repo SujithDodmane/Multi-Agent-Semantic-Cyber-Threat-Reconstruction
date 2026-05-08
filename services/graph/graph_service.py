@@ -136,25 +136,20 @@ async def broadcast_delta(delta: dict):
 
 @app.post("/graph/ingest")
 async def ingest_report(request: ReportIngestionRequest):
-    """
-    Ingest a ForensicReport and update the knowledge graph.
-
-    Extracts entities and edges, updates threat scores,
-    and broadcasts delta to WebSocket clients.
-    """
+    """Ingest a ForensicReport."""
     delta = graph.ingest_report(request.report, severity=request.severity)
-
-    # Broadcast to connected browsers
     await broadcast_delta(delta)
+    return {"ingested": True, "delta": delta}
 
-    return {
-        "ingested": True,
-        "new_nodes": len(delta.get("new_nodes", [])),
-        "updated_nodes": len(delta.get("updated_nodes", [])),
-        "new_edges": len(delta.get("new_edges", [])),
-        "total_nodes": graph.node_count,
-        "total_edges": graph.edge_count,
-    }
+@app.post("/graph/ingest/raw")
+async def ingest_raw_log(entry: dict):
+    """
+    Ingest a raw log entry directly into the graph.
+    Allows for real-time visualization of logs before synthesis.
+    """
+    delta = graph.ingest_raw_log(entry)
+    await broadcast_delta(delta)
+    return {"ingested": True, "delta": delta}
 
 
 @app.get("/graph/full")

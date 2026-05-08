@@ -327,7 +327,8 @@ async function processEntry(entry) {
   cognitiveRamWrite(`context_triage_${logUuid}`, entry);
   const triageResult = triageScore(entry);
 
-  console.log(`🔍 [TRIAGE] Score: ${triageResult.score} → ${triageResult.severity} | Flags: ${triageResult.heuristic_flags.join(', ')}`);
+  console.log(`🔍 [TRIAGE] Heuristic engine analyzing behavior...`);
+  console.log(`   └─ Score: ${triageResult.score} (${triageResult.severity}) | Indicators: [${triageResult.heuristic_flags.join(', ')}]`);
 
   // === STORAGE SKILL (HTTP → Python correlation /ingest) ===
   // Ref: §3.1 — "Every ingested log... must be embedded and stored in the ChromaDB vector space"
@@ -341,14 +342,23 @@ async function processEntry(entry) {
       dest_ip: entry.dest_ip,
       hostname: entry.hostname,
     });
-    console.log(`💾 [STORAGE] Log engram stored in semantic memory`);
+    console.log(`💾 [MEMORY] Encoding log into semantic vector space (ChromaDB)`);
+    
+    // === GRAPH INGESTION (HTTP → Python) ===
+    // Ingest raw log into graph for real-time visualization
+    try {
+      await httpPost(`${config.graphServiceUrl}/graph/ingest/raw`, entry);
+      console.log(`🕸️ [GRAPH] Projecting entities [${entry.hostname}, ${entry.process_name || 'N/A'}] onto Knowledge Graph`);
+    } catch (e) {
+      console.error(`[GRAPH] Ingestion failed: ${e.message}`);
+    }
   } catch (e) {
     console.error(`[STORAGE] Ingestion failed: ${e.message}`);
     // Non-blocking: continue with triage even if storage fails
   }
 
   if (triageResult.severity === 'BENIGN') {
-    console.log(`[TRIAGE] BENIGN — pipeline stops`);
+    console.log(`✅ [TRIAGE] Activity matches baseline — Ignoring.`);
     cognitiveRamDelete(`context_triage_${logUuid}`);
     return;
   }
@@ -364,13 +374,13 @@ async function processEntry(entry) {
 
   // P0 immediate alert → Telegram
   if (triageResult.severity === 'P0') {
-    console.log(`[ALERT] ⚠️ P0 CRITICAL — Sending pre-correlation alert`);
+    console.log(`🚨 [ALERT] P0 CRITICAL — Triggering immediate tactical alert`);
     try {
       await httpPost(`${config.notificationServiceUrl}/notify/telegram/raw`, {
         message: `🔴 *P0 CRITICAL — Pre-Correlation Alert*\n\nEvent: \`${entry.event_type}\`\nHost: \`${entry.hostname || 'unknown'}\`\nSource: \`${entry.source_ip || 'N/A'}\` → \`${entry.dest_ip || 'N/A'}\`\nLog UUID: \`${logUuid}\`\n\n_Full analysis in progress..._`,
         parse_mode: 'Markdown',
       }, 5000);
-      console.log(`[TELEGRAM] P0 pre-alert sent`);
+      console.log(`📬 [TELEGRAM] Tactical alert delivered successfully`);
     } catch (e) {
       console.error(`[TELEGRAM] P0 alert failed: ${e.message}`);
     }
@@ -397,7 +407,12 @@ async function processEntry(entry) {
       });
 
       recordSuccess('correlation');
-      console.log(`🔗 [CORRELATION] Cluster size: ${corrResult.cluster_size}, Cold start: ${corrResult.cold_start}`);
+      if (corrResult.cluster_size > 1) {
+        console.log(`✅ [CORRELATION] Identified attack cluster of ${corrResult.cluster_size} related events.`);
+        console.log(`   └─ Temporal Span: ${corrResult.temporal_span_minutes.toFixed(1)} mins`);
+      } else {
+        console.log(`⚠️ [CORRELATION] No historical links found (Cold Start). Monitoring for further activity...`);
+      }
 
       cognitiveRamWrite(`context_timeline_${logUuid}`, {
         triggering_log: entry, correlation: corrResult,
@@ -421,6 +436,8 @@ async function processEntry(entry) {
 
   try {
     const timelineContext = cognitiveRamRead(`context_timeline_${logUuid}`);
+    console.log(`🧠 [SYNTHESIS] Reconstructing attack narrative using Qwen 2.5 LLM...`);
+    console.log(`   └─ Input: ${timelineContext.correlation.cluster_size} related events + forensic context`);
     const synthResult = await httpPost(`${config.synthesizerServiceUrl}/synthesize`, {
       triggering_log: timelineContext.triggering_log,
       correlated_cluster: (timelineContext.correlation.correlated_entries || []).map(e => ({
@@ -436,8 +453,9 @@ async function processEntry(entry) {
     recordSuccess('synthesizer');
 
     if (synthResult.success) {
-      console.log(`[TIMELINE] ✅ Report generated — Confidence: ${synthResult.report.confidence}`);
-      console.log(`[TIMELINE] MITRE: ${(synthResult.report.mitre_techniques || []).join(', ')}`);
+      console.log(`✅ [TIMELINE] Forensic report generated (Confidence: ${synthResult.report.confidence * 100}%)`);
+      console.log(`   └─ Narrative: ${synthResult.report.narrative.substring(0, 100)}...`);
+      console.log(`   └─ MITRE: ${(synthResult.report.mitre_techniques || []).join(', ')}`);
 
       // === PROTOCOL ADAPTER: Telegram delivery ===
       try {
