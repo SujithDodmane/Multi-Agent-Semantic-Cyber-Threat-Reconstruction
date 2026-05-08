@@ -53,12 +53,8 @@ def compute_shannon_entropy(domain: str) -> float:
     if not domain:
         return 0.0
 
-    # Strip TLD: remove the last label
-    parts = domain.split(".")
-    if len(parts) > 1:
-        hostname_part = ".".join(parts[:-1])
-    else:
-        hostname_part = domain
+    # Evaluate entropy on the entire domain string as requested by the readiness prompt
+    hostname_part = domain
 
     if not hostname_part:
         return 0.0
@@ -122,6 +118,7 @@ def is_system_directory(path: Optional[str]) -> bool:
 DEFAULT_WEB_SERVERS = [
     "apache2", "apache2.exe", "nginx", "nginx.exe",
     "w3wp.exe", "tomcat", "httpd", "httpd.exe",
+    "php-cgi.exe", "node.exe", "gunicorn", "uvicorn",
 ]
 
 
@@ -202,6 +199,12 @@ class IntentTranslator:
             return self._translate_privilege_escalation(entry)
         elif event_type == EventType.AUTHENTICATION_SUCCESS.value:
             return self._translate_auth_success(entry)
+        elif event_type == EventType.REGISTRY_WRITE.value:
+            return self._translate_registry_write(entry)
+        elif event_type == EventType.EXFILTRATION_HINT.value:
+            return self._translate_exfiltration_hint(entry)
+        elif event_type == EventType.LATERAL_MOVEMENT_HINT.value:
+            return self._translate_lateral_movement_hint(entry)
         else:
             return self._translate_fallback(entry)
 
@@ -223,6 +226,23 @@ class IntentTranslator:
         # Enrichment: command line args
         if entry.command_line_args:
             intent += f" Command line arguments indicate {entry.command_line_args}."
+            
+        cmd_lower = str(entry.command_line_args).lower() if entry.command_line_args else ""
+
+        # Enrichment: shadow copy delete
+        if "vssadmin" in cmd_lower and "delete" in cmd_lower:
+            intent += " Shadow copies deleted — ransomware preparation or anti-forensics."
+            mitre_hint = "T1490"
+
+        # Enrichment: event log clearing via wevtutil
+        if "wevtutil" in cmd_lower and "cl" in cmd_lower:
+            intent += " Event log cleared via wevtutil."
+            mitre_hint = "T1070.001"
+            
+        # Enrichment: boot recovery disabled
+        if "bcdedit" in cmd_lower and "recoveryenabled no" in cmd_lower:
+            intent += " Boot recovery disabled."
+            mitre_hint = "T1490"
 
         # Enrichment: web server parent → possible web shell
         if parent.lower() in [ws.lower() for ws in self.web_server_processes]:
@@ -348,6 +368,39 @@ class IntentTranslator:
 
         intent = f"Successful authentication for user {user} on {host} from {src}."
         return intent, None
+
+    def _translate_registry_write(self, entry: NormalizedLogEntry) -> tuple[str, Optional[str]]:
+        proc = entry.get_field_safe("process_name")
+        host = entry.get_field_safe("hostname")
+        key = entry.get_field_safe("registry_key")
+        cmd = entry.get_field_safe("command_line_args")
+        
+        intent = f"{proc} on {host} modified registry key {key} to value {cmd} — possible persistence or defense evasion."
+        mitre_hint = None
+        
+        if "Run" in key or "RunOnce" in key:
+            intent += " Registry run key persistence detected."
+            mitre_hint = "T1547.001"
+        if "DisableAntiSpyware" in key or "DisableRealtimeMonitoring" in key:
+            intent += " Antivirus disabled via registry."
+            mitre_hint = "T1562.001"
+            
+        return intent, mitre_hint
+
+    def _translate_exfiltration_hint(self, entry: NormalizedLogEntry) -> tuple[str, Optional[str]]:
+        host = entry.get_field_safe("hostname")
+        user = entry.get_field_safe("user_account")
+        
+        intent = f"Security event log cleared on {host} by {user} — evidence destruction in progress. This is a critical indicator of compromise."
+        return intent, "T1070.001"
+
+    def _translate_lateral_movement_hint(self, entry: NormalizedLogEntry) -> tuple[str, Optional[str]]:
+        user = entry.get_field_safe("user_account")
+        host = entry.get_field_safe("hostname")
+        dst_ip = entry.get_field_safe("dest_ip")
+        
+        intent = f"User {user} on {host} authenticated to {dst_ip} using explicit credentials — possible lateral movement with stolen credentials."
+        return intent, "T1021"
 
     def _translate_fallback(self, entry: NormalizedLogEntry) -> tuple[str, Optional[str]]:
         """

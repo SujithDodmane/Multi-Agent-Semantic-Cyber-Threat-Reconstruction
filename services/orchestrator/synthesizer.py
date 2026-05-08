@@ -86,6 +86,14 @@ MITRE ATT&CK Reference Table (assign IDs ONLY for observed behaviors):
 - T1543: Create or Modify System Process (service/daemon persistence)
 - T1505: Server Software Component (web shell deployment)
 - T1190: Exploit Public-Facing Application (initial access via exploit)
+- T1046: Network Service Discovery (port scanning)
+- T1053: Scheduled Task/Job (persistence via task scheduler)
+- T1547: Boot or Logon Autostart Execution (registry persistence)
+- T1490: Inhibit System Recovery (shadow copy deletion)
+- T1070: Indicator Removal (log clearing)
+- T1562: Impair Defenses (antivirus/security tool disabling)
+- T1041: Exfiltration Over C2 Channel (large data transfer)
+- T1048: Exfiltration Over Alternative Protocol (exfiltration via alternative ports)
 """.strip()
 
 
@@ -202,7 +210,7 @@ async def synthesize(request: SynthesizeRequest):
 
     for attempt, temp in enumerate(temperatures, 1):
         try:
-            logger.info(f"Synthesis attempt {attempt}/{MAX_RETRIES} (temp={temp})")
+            logger.info(f"🧠 [SYNTHESIS] Attempt {attempt}/{MAX_RETRIES} — Reconstructing attack timeline (temp={temp})")
 
             raw_response = await _call_ollama(system_prompt, user_prompt, temp)
 
@@ -211,7 +219,7 @@ async def synthesize(request: SynthesizeRequest):
             report = ForensicReport(**report_data)
 
             logger.info(
-                f"Synthesis successful on attempt {attempt}. "
+                f"✅ [SYNTHESIS] Analysis Complete! "
                 f"Confidence: {report.confidence:.2f}, "
                 f"MITRE: {report.mitre_techniques}"
             )

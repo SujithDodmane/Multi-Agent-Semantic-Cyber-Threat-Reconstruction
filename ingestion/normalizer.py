@@ -108,6 +108,8 @@ WINDOWS_EVENT_MAP: dict[str, EventType] = {
     "4769": EventType.AUTHENTICATION_SUCCESS,  # Kerberos service ticket
     "5140": EventType.LATERAL_MOVEMENT_HINT,  # Network share accessed
     "5145": EventType.LATERAL_MOVEMENT_HINT,  # Network share object accessed
+    "1102": EventType.EXFILTRATION_HINT,  # Security log cleared
+    "104": EventType.EXFILTRATION_HINT,   # System log cleared
 }
 
 
@@ -116,25 +118,42 @@ def normalize_sysmon(parsed: dict[str, Any], raw_line: str) -> NormalizedLogEntr
     event_id = str(parsed.get("EventID", parsed.get("event.code", "")))
     event_type = SYSMON_EVENT_MAP.get(event_id, EventType.UNKNOWN)
 
+
+    process_name = _safe_str(parsed.get("Image", parsed.get("process.name", parsed.get("NewProcessName"))))
+    dest_ip = _safe_str(parsed.get("DestinationIp", parsed.get("dst_ip", parsed.get("DestinationAddress"))))
+    command_line_args = _safe_str(parsed.get("CommandLine", parsed.get("process.command_line")))
+    
+    if event_id == "10":
+        event_type = EventType.PRIVILEGE_ESCALATION
+        source_image = _safe_str(parsed.get("SourceImage"))
+        process_name = source_image.split("\\")[-1] if source_image else "unknown"
+        dest_ip = _safe_str(parsed.get("TargetImage", "unknown"))  # target process
+        granted_access = _safe_str(parsed.get("GrantedAccess", "?"))
+        target_image = _safe_str(parsed.get("TargetImage", "?"))
+        command_line_args = f"GrantedAccess:{granted_access} Target:{target_image}"
+    elif event_id == "13":
+        event_type = EventType.REGISTRY_WRITE
+        details = _safe_str(parsed.get("Details", "?"))
+        command_line_args = details
+
     return NormalizedLogEntry(
         log_uuid=str(uuid.uuid4()),
         ingestion_timestamp=_now_iso(),
         event_timestamp=_parse_timestamp(parsed, ["UtcTime", "TimeCreated", "ts", "timestamp"]),
         source_ip=_safe_str(parsed.get("SourceIp", parsed.get("src_ip", parsed.get("SourceAddress")))),
-        dest_ip=_safe_str(parsed.get("DestinationIp", parsed.get("dst_ip", parsed.get("DestinationAddress")))),
-        source_port=_safe_int(parsed.get("SourcePort", parsed.get("src_port"))),
+        dest_ip=dest_ip,
         dest_port=_safe_int(parsed.get("DestinationPort", parsed.get("dst_port"))),
-        process_name=_safe_str(parsed.get("Image", parsed.get("process.name", parsed.get("NewProcessName")))),
+        process_name=_safe_str(parsed.get("Image", parsed.get("process.name", parsed.get("process_name", parsed.get("source", "sysmon"))))),
         parent_process_name=_safe_str(parsed.get("ParentImage", parsed.get("process.parent.name", parsed.get("ParentProcessName")))),
         user_account=_safe_str(parsed.get("User", parsed.get("user.name", parsed.get("SubjectUserName")))),
         event_type=event_type,
         event_code=event_id,
-        hostname=str(parsed.get("Computer", parsed.get("host.name", parsed.get("ComputerName", "unknown")))),
+        hostname=str(parsed.get("hostname", parsed.get("Computer", parsed.get("host.name", parsed.get("ComputerName", "unknown_host"))))),
         sha256_hash=_sha256(raw_line),
         raw_payload=raw_line,
         file_path=_safe_str(parsed.get("TargetFilename", parsed.get("file.path"))),
         registry_key=_safe_str(parsed.get("TargetObject")),
-        command_line_args=_safe_str(parsed.get("CommandLine", parsed.get("process.command_line"))),
+        command_line_args=command_line_args,
         dns_query=_safe_str(parsed.get("QueryName")),
     )
 
@@ -144,6 +163,15 @@ def normalize_windows_event(parsed: dict[str, Any], raw_line: str) -> Normalized
     event_id = str(parsed.get("EventID", ""))
     event_type = WINDOWS_EVENT_MAP.get(event_id, EventType.UNKNOWN)
 
+    process_name = _safe_str(parsed.get("NewProcessName", parsed.get("ProcessName")))
+    user_account = _safe_str(parsed.get("TargetUserName", parsed.get("SubjectUserName")))
+    command_line_args = _safe_str(parsed.get("CommandLine"))
+
+    if event_id in ["1102", "104"]:
+        event_type = EventType.EXFILTRATION_HINT
+        process_name = "wevtutil.exe"
+        command_line_args = f"EventLogCleared:Channel={parsed.get('Channel', 'Security')}"
+
     return NormalizedLogEntry(
         log_uuid=str(uuid.uuid4()),
         ingestion_timestamp=_now_iso(),
@@ -152,15 +180,15 @@ def normalize_windows_event(parsed: dict[str, Any], raw_line: str) -> Normalized
         dest_ip=_safe_str(parsed.get("DestAddress", parsed.get("TargetServerName"))),
         source_port=_safe_int(parsed.get("IpPort", parsed.get("SourcePort"))),
         dest_port=_safe_int(parsed.get("DestPort")),
-        process_name=_safe_str(parsed.get("NewProcessName", parsed.get("ProcessName"))),
+        process_name=_safe_str(process_name) or _safe_str(parsed.get("source", "windows_event")),
         parent_process_name=_safe_str(parsed.get("ParentProcessName")),
-        user_account=_safe_str(parsed.get("TargetUserName", parsed.get("SubjectUserName"))),
+        user_account=user_account,
         event_type=event_type,
         event_code=event_id,
-        hostname=str(parsed.get("Computer", parsed.get("Workstation", "unknown"))),
+        hostname=str(parsed.get("hostname", parsed.get("Computer", parsed.get("Workstation", "unknown_host")))),
         sha256_hash=_sha256(raw_line),
         raw_payload=raw_line,
-        command_line_args=_safe_str(parsed.get("CommandLine")),
+        command_line_args=command_line_args,
     )
 
 
@@ -177,7 +205,8 @@ def normalize_zeek_conn(parsed: dict[str, Any], raw_line: str) -> NormalizedLogE
         source_port=_safe_int(parsed.get("id.orig_p")),
         dest_port=_safe_int(parsed.get("id.resp_p")),
         event_type=EventType.NETWORK_CONNECTION,
-        hostname=str(parsed.get("host", "unknown")),
+        process_name=_safe_str(parsed.get("source", "zeek_conn")),
+        hostname=str(parsed.get("hostname", parsed.get("host", "unknown_host"))),
         sha256_hash=_sha256(raw_line),
         raw_payload=raw_line,
         bytes_sent=_safe_int(parsed.get("orig_bytes")),
@@ -196,7 +225,8 @@ def normalize_zeek_dns(parsed: dict[str, Any], raw_line: str) -> NormalizedLogEn
         source_port=_safe_int(parsed.get("id.orig_p")),
         dest_port=_safe_int(parsed.get("id.resp_p")),
         event_type=EventType.DNS_QUERY,
-        hostname=str(parsed.get("host", "unknown")),
+        process_name=_safe_str(parsed.get("source", "zeek_dns")),
+        hostname=str(parsed.get("hostname", parsed.get("host", "unknown_host"))),
         sha256_hash=_sha256(raw_line),
         raw_payload=raw_line,
         dns_query=_safe_str(parsed.get("query")),
@@ -218,7 +248,8 @@ def normalize_zeek_http(parsed: dict[str, Any], raw_line: str) -> NormalizedLogE
         source_port=_safe_int(parsed.get("id.orig_p")),
         dest_port=_safe_int(parsed.get("id.resp_p")),
         event_type=EventType.HTTP_REQUEST,
-        hostname=str(parsed.get("host", "unknown")),
+        process_name=_safe_str(parsed.get("source", "zeek_http")),
+        hostname=str(parsed.get("hostname", parsed.get("host", "unknown_host"))),
         sha256_hash=_sha256(raw_line),
         raw_payload=raw_line,
         http_url=full_url,
@@ -226,6 +257,26 @@ def normalize_zeek_http(parsed: dict[str, Any], raw_line: str) -> NormalizedLogE
         bytes_sent=_safe_int(parsed.get("request_body_len")),
         bytes_received=_safe_int(parsed.get("response_body_len")),
     )
+
+
+def normalize_zeek_ssl(parsed: dict[str, Any], raw_line: str) -> NormalizedLogEntry:
+    """Normalize Zeek ssl.log entry."""
+    return NormalizedLogEntry(
+        log_uuid=str(uuid.uuid4()),
+        ingestion_timestamp=_now_iso(),
+        event_timestamp=_parse_timestamp(parsed, ["ts"]),
+        source_ip=_safe_str(parsed.get("id.orig_h")),
+        dest_ip=_safe_str(parsed.get("id.resp_h")),
+        source_port=_safe_int(parsed.get("id.orig_p")),
+        dest_port=_safe_int(parsed.get("id.resp_p")),
+        event_type=EventType.DNS_QUERY,
+        process_name=_safe_str(parsed.get("source", "zeek_ssl")),
+        hostname=str(parsed.get("hostname", parsed.get("host", "unknown_host"))),
+        sha256_hash=_sha256(raw_line),
+        raw_payload=raw_line,
+        dns_query=_safe_str(parsed.get("server_name")),
+    )
+
 
 
 # ─── Firewall Log Normalization ──────────────────────────────────────────────
@@ -241,12 +292,13 @@ def normalize_firewall(parsed: dict[str, Any], raw_line: str) -> NormalizedLogEn
         log_uuid=str(uuid.uuid4()),
         ingestion_timestamp=_now_iso(),
         event_timestamp=_parse_timestamp(parsed, ["timestamp", "ts", "date", "time"]),
-        source_ip=_safe_str(parsed.get("src", parsed.get("SRC", parsed.get("source_ip")))),
-        dest_ip=_safe_str(parsed.get("dst", parsed.get("DST", parsed.get("dest_ip")))),
-        source_port=_safe_int(parsed.get("spt", parsed.get("SPT", parsed.get("source_port")))),
-        dest_port=_safe_int(parsed.get("dpt", parsed.get("DPT", parsed.get("dest_port")))),
+        source_ip=_safe_str(parsed.get("src_ip", parsed.get("src", parsed.get("SRC", parsed.get("source_ip"))))),
+        dest_ip=_safe_str(parsed.get("dst_ip", parsed.get("dst", parsed.get("DST", parsed.get("dest_ip"))))),
+        source_port=_safe_int(parsed.get("src_port", parsed.get("spt", parsed.get("SPT", parsed.get("source_port"))))),
+        dest_port=_safe_int(parsed.get("dst_port", parsed.get("dpt", parsed.get("DPT", parsed.get("dest_port"))))),
         event_type=event_type,
-        hostname=str(parsed.get("hostname", parsed.get("device", "unknown"))),
+        process_name=_safe_str(parsed.get("source", "firewall")),
+        hostname=str(parsed.get("hostname", parsed.get("device", "unknown_host"))),
         sha256_hash=_sha256(raw_line),
         raw_payload=raw_line,
     )
@@ -281,6 +333,7 @@ NORMALIZER_MAP = {
     LogSource.ZEEK_CONN: normalize_zeek_conn,
     LogSource.ZEEK_DNS: normalize_zeek_dns,
     LogSource.ZEEK_HTTP: normalize_zeek_http,
+    LogSource.ZEEK_SSL: normalize_zeek_ssl,
     LogSource.FIREWALL: normalize_firewall,
     LogSource.SYSLOG: normalize_unknown,  # Syslog uses generic for now
     LogSource.UNKNOWN: normalize_unknown,

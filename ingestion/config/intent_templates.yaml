@@ -22,6 +22,10 @@ web_server_processes:
   - tomcat
   - httpd
   - httpd.exe
+  - php-cgi.exe
+  - node.exe
+  - gunicorn
+  - uvicorn
 
 # --- Templates by event_type ---
 templates:
@@ -33,6 +37,15 @@ templates:
       - condition: "parent_process_name in web_server_processes"
         append: " Parent process is a web server — possible web shell execution."
         mitre_technique_hint: "T1505.003"
+      - condition: "'vssadmin' in str(command_line_args).lower() and 'delete' in str(command_line_args).lower()"
+        append: " Shadow copies deleted — ransomware preparation or anti-forensics."
+        mitre_technique_hint: "T1490"
+      - condition: "'wevtutil' in str(command_line_args).lower() and 'cl' in str(command_line_args).lower()"
+        append: " Event log cleared via wevtutil."
+        mitre_technique_hint: "T1070.001"
+      - condition: "'bcdedit' in str(command_line_args).lower() and 'recoveryenabled no' in str(command_line_args).lower()"
+        append: " Boot recovery disabled."
+        mitre_technique_hint: "T1490"
     priority: 1
 
   NETWORK_CONNECTION:
@@ -75,6 +88,45 @@ templates:
         append: " Target is a protected system directory — possible persistence mechanism."
         mitre_technique_hint: "T1543"
     priority: 1
+
+  PRIVILEGE_ESCALATION:
+    template: "{process_name} on {hostname} accessed process lsass.exe (PID {dest_port}) — credential dumping attempt. Access mask indicates memory read."
+    enrichments: []
+    priority: 0
+
+  REGISTRY_WRITE:
+    template: "{process_name} on {hostname} modified registry key {registry_key} to value {command_line_args} — possible persistence or defense evasion."
+    enrichments:
+      - condition: "'Run' in str(registry_key) or 'RunOnce' in str(registry_key)"
+        append: " Registry run key persistence detected."
+        mitre_technique_hint: "T1547.001"
+      - condition: "'DisableAntiSpyware' in str(registry_key) or 'DisableRealtimeMonitoring' in str(registry_key)"
+        append: " Antivirus disabled via registry."
+        mitre_technique_hint: "T1562.001"
+    priority: 1
+
+  SERVICE_INSTALL:
+    template: "New service '{command_line_args}' installed on {hostname} with path {file_path} running as {user_account} — possible persistence mechanism."
+    enrichments: []
+    priority: 1
+    mitre_technique_hint: "T1543.003"
+
+  SCHEDULED_TASK:
+    template: "Scheduled task '{command_line_args}' created on {hostname} by {user_account} — task will execute at logon/startup for persistence."
+    enrichments: []
+    priority: 1
+    mitre_technique_hint: "T1053.005"
+
+  EXFILTRATION_HINT:
+    template: "Security event log cleared on {hostname} by {user_account} — evidence destruction in progress. This is a critical indicator of compromise."
+    enrichments: []
+    priority: 0
+
+  LATERAL_MOVEMENT_HINT:
+    template: "User {user_account} on {hostname} authenticated to {dest_ip} using explicit credentials — possible lateral movement with stolen credentials."
+    enrichments: []
+    priority: 1
+    mitre_technique_hint: "T1021"
 
   # --- Fallback for unknown/unmatched event types ---
   UNKNOWN:

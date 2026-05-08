@@ -167,5 +167,5 @@ class ForensicReport(BaseModel):
     mitre_techniques: list[str] = Field(default_factory=list)
     entities: list[EntityNode] = Field(default_factory=list)
     timeline_events: list[TimelineEvent] = Field(default_factory=list)
-    root_cause: str = ""
+    root_cause: Optional[str] = ""
     report_id: str = Field(default_factory=lambda: str(uuid.uuid4()))

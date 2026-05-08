@@ -40,6 +40,20 @@ c2_ports:
   - 6667   # IRC
   - 31337  # Back Orifice
   - 12345  # NetBus
+  - 8443   # HTTPS alt
+  - 4443   # HTTPS alt
+  - 2222   # SSH alt
+
+# Known C2 IPs — each match adds +50 to severity score
+known_c2_ips:
+  - "185.220.101.45"
+  - "185.220.101.46"
+  - "91.92.248.55"
+  - "203.0.113.77"
+
+# Known Bad Hashes — each match adds +45 to severity score
+known_bad_hashes:
+  - "61C0810A23580CF492A6BA4F7654566108331E7A4134C968C2D6A05261B2D8A1"
 
 # Triage severity thresholds
 severity_thresholds:

@@ -30,6 +30,7 @@ data/*.db-wal
 data/*.db-shm
 data/chromadb/
 data/cursors/
+data/cognitive_ram/
 
 # --- Logs (monitored directory) ---
 logs/*.log

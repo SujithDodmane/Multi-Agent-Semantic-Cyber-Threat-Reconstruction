@@ -321,13 +321,13 @@ function isCircuitOpen(serviceName) {
 
 async function processEntry(entry) {
   const logUuid = entry.log_uuid;
-  console.log(`\n[AEGIS] Processing ${logUuid} — ${entry.event_type}`);
+  console.log(`\n🛡 [AEGIS] 🔎 Incoming: ${logUuid} — ${entry.event_type}`);
 
   // === TRIAGE SKILL (pure computation) ===
   cognitiveRamWrite(`context_triage_${logUuid}`, entry);
   const triageResult = triageScore(entry);
 
-  console.log(`[TRIAGE] Score: ${triageResult.score} → ${triageResult.severity} | Flags: ${triageResult.heuristic_flags.join(', ')}`);
+  console.log(`🔍 [TRIAGE] Score: ${triageResult.score} → ${triageResult.severity} | Flags: ${triageResult.heuristic_flags.join(', ')}`);
 
   // === STORAGE SKILL (HTTP → Python correlation /ingest) ===
   // Ref: §3.1 — "Every ingested log... must be embedded and stored in the ChromaDB vector space"
@@ -341,7 +341,7 @@ async function processEntry(entry) {
       dest_ip: entry.dest_ip,
       hostname: entry.hostname,
     });
-    console.log(`[STORAGE] Log engram stored in semantic memory`);
+    console.log(`💾 [STORAGE] Log engram stored in semantic memory`);
   } catch (e) {
     console.error(`[STORAGE] Ingestion failed: ${e.message}`);
     // Non-blocking: continue with triage even if storage fails
@@ -378,7 +378,7 @@ async function processEntry(entry) {
 
   // === CORRELATION SKILL (HTTP → Python) ===
   if (!triageResult.correlation_required) {
-    console.log(`[CORRELATION] Skipped (not required for ${triageResult.severity})`);
+    console.log(`🔗 [CORRELATION] Skipped (not required for ${triageResult.severity})`);
     cognitiveRamWrite(`context_timeline_${logUuid}`, {
       triggering_log: entry, correlation: { cold_start: true, cluster_size: 0 },
     });
@@ -397,7 +397,7 @@ async function processEntry(entry) {
       });
 
       recordSuccess('correlation');
-      console.log(`[CORRELATION] Cluster size: ${corrResult.cluster_size}, Cold start: ${corrResult.cold_start}`);
+      console.log(`🔗 [CORRELATION] Cluster size: ${corrResult.cluster_size}, Cold start: ${corrResult.cold_start}`);
 
       cognitiveRamWrite(`context_timeline_${logUuid}`, {
         triggering_log: entry, correlation: corrResult,

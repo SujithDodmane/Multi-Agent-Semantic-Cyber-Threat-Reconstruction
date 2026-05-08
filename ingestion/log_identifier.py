@@ -32,6 +32,7 @@ class LogSource(str, Enum):
     ZEEK_CONN = "zeek_conn"
     ZEEK_DNS = "zeek_dns"
     ZEEK_HTTP = "zeek_http"
+    ZEEK_SSL = "zeek_ssl"
     FIREWALL = "firewall"
     SYSLOG = "syslog"
     UNKNOWN = "unknown"
@@ -43,6 +44,7 @@ PATH_PATTERNS: list[tuple[re.Pattern, LogSource]] = [
     (re.compile(r"sysmon|Microsoft-Windows-Sysmon", re.IGNORECASE), LogSource.SYSMON),
     (re.compile(r"zeek.*dns|bro.*dns", re.IGNORECASE), LogSource.ZEEK_DNS),
     (re.compile(r"zeek.*http|bro.*http", re.IGNORECASE), LogSource.ZEEK_HTTP),
+    (re.compile(r"zeek.*ssl|bro.*ssl", re.IGNORECASE), LogSource.ZEEK_SSL),
     (re.compile(r"zeek|bro", re.IGNORECASE), LogSource.ZEEK_CONN),
     (re.compile(r"firewall|pf\.log|iptables|ufw", re.IGNORECASE), LogSource.FIREWALL),
 ]
@@ -61,14 +63,24 @@ class FieldSignature:
 # --- Field signature registry ---
 # Ref: Methodology §1.2 — "Field signature matching"
 FIELD_SIGNATURES: list[FieldSignature] = [
+    # Identification by source field (common in scenario logs)
+    FieldSignature(field_name="source", expected_values=["sysmon"], source=LogSource.SYSMON, priority=1),
+    FieldSignature(field_name="source", expected_values=["windows_event"], source=LogSource.WINDOWS_EVENT, priority=2),
+    FieldSignature(field_name="source", expected_values=["zeek_conn"], source=LogSource.ZEEK_CONN, priority=3),
+    FieldSignature(field_name="source", expected_values=["zeek_dns"], source=LogSource.ZEEK_DNS, priority=4),
+    FieldSignature(field_name="source", expected_values=["zeek_http"], source=LogSource.ZEEK_HTTP, priority=5),
+    FieldSignature(field_name="source", expected_values=["zeek_ssl"], source=LogSource.ZEEK_SSL, priority=6),
+    FieldSignature(field_name="source", expected_values=["firewall"], source=LogSource.FIREWALL, priority=7),
+    
     # Windows Event Log — contains EventID
-    FieldSignature(field_name="EventID", source=LogSource.WINDOWS_EVENT, priority=1),
-    FieldSignature(field_name="event.code", source=LogSource.SYSMON, priority=2),
+    FieldSignature(field_name="EventID", source=LogSource.WINDOWS_EVENT, priority=10),
+    FieldSignature(field_name="event.code", source=LogSource.SYSMON, priority=11),
     # Zeek logs — _path field identifies the stream
     FieldSignature(field_name="_path", expected_values=["dns"], source=LogSource.ZEEK_DNS, priority=3),
     FieldSignature(field_name="_path", expected_values=["http"], source=LogSource.ZEEK_HTTP, priority=4),
-    FieldSignature(field_name="_path", expected_values=["conn", "ssl", "x509"], source=LogSource.ZEEK_CONN, priority=5),
-    FieldSignature(field_name="_path", source=LogSource.ZEEK_CONN, priority=6),  # Any Zeek
+    FieldSignature(field_name="_path", expected_values=["ssl", "x509"], source=LogSource.ZEEK_SSL, priority=5),
+    FieldSignature(field_name="_path", expected_values=["conn"], source=LogSource.ZEEK_CONN, priority=6),
+    FieldSignature(field_name="_path", source=LogSource.ZEEK_CONN, priority=7),  # Any Zeek
 ]
 
 # RFC 5424 syslog header pattern
