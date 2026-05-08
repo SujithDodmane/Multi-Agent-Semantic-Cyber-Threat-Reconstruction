@@ -3,67 +3,110 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AEGIS — Threat Knowledge Graph</title>
-    <meta name="description" content="Real-time threat investigation knowledge graph powered by AEGIS multi-agent semantic analysis">
+    <title>AEGIS — 3D Threat Reconstruction Mission Control</title>
+    <meta name="description" content="Immersive 3D threat investigation knowledge graph powered by AEGIS multi-agent semantic analysis">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/cytoscape@3.30.4/dist/cytoscape.min.js"></script>
-    <script src="https://unpkg.com/cytoscape-cose-bilkent@4.1.0/cytoscape-cose-bilkent.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.73.3/dist/3d-force-graph.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <!-- Header -->
     <header id="header">
         <div class="header-left">
-            <h1>🛡 AEGIS</h1>
-            <span class="subtitle">Threat Knowledge Graph</span>
+            <div class="logo-container">
+                <span class="logo-icon">🛡️</span>
+                <div class="logo-text">
+                    <h1>AEGIS</h1>
+                    <span class="subtitle">3D MISSION CONTROL</span>
+                </div>
+            </div>
         </div>
         <div class="header-center">
-            <div class="stat-badge" id="stat-nodes">
-                <span class="stat-label">Nodes</span>
-                <span class="stat-value" id="node-count">0</span>
-            </div>
-            <div class="stat-badge" id="stat-edges">
-                <span class="stat-label">Edges</span>
-                <span class="stat-value" id="edge-count">0</span>
-            </div>
-            <div class="stat-badge" id="stat-status">
-                <span class="stat-label">Status</span>
-                <span class="stat-value" id="ws-status">Connecting...</span>
+            <div class="stat-group">
+                <div class="stat-badge" id="stat-nodes">
+                    <span class="stat-label">ENTITIES</span>
+                    <span class="stat-value" id="node-count">0</span>
+                </div>
+                <div class="stat-badge" id="stat-edges">
+                    <span class="stat-label">LINKS</span>
+                    <span class="stat-value" id="edge-count">0</span>
+                </div>
+                <div class="stat-badge" id="stat-threat">
+                    <span class="stat-label">RISK LEVEL</span>
+                    <span class="stat-value" id="risk-score">0.0</span>
+                </div>
             </div>
         </div>
         <div class="header-right">
-            <button id="btn-layout-cose" class="btn active" title="Force-directed cluster layout">CoSE</button>
-            <button id="btn-layout-bfs" class="btn" title="Timeline DAG layout">BFS</button>
-            <button id="btn-fit" class="btn" title="Fit graph to screen">Fit</button>
-            <button id="btn-clear" class="btn btn-danger" title="Clear graph">Clear</button>
+            <div class="status-indicator">
+                <span class="status-dot pulse" id="status-dot"></span>
+                <span class="status-text" id="ws-status">SYNCING</span>
+            </div>
+            <button id="btn-reset" class="btn-action" title="Reset View">RESET</button>
+            <button id="btn-clear" class="btn-action btn-danger" title="Purge Graph">PURGE</button>
         </div>
     </header>
 
-    <!-- Graph Canvas -->
-    <div id="cy"></div>
+    <!-- 3D Canvas Container -->
+    <div id="3d-graph"></div>
+
+    <!-- Left Overlay: Threat Monitor -->
+    <aside id="threat-monitor" class="glass-panel">
+        <div class="panel-header">
+            <span class="panel-icon">📡</span>
+            <h2>THREAT MONITOR</h2>
+            <div class="panel-badge">LIVE</div>
+        </div>
+        <div id="alert-logs" class="log-container">
+            <div class="log-placeholder">Waiting for ingestion...</div>
+        </div>
+    </aside>
+
+    <!-- Right Overlay: System Vitals -->
+    <aside id="system-vitals" class="glass-panel">
+        <div class="panel-header">
+            <span class="panel-icon">📊</span>
+            <h2>SYSTEM VITALS</h2>
+        </div>
+        <div class="vital-group">
+            <div class="vital-item">
+                <label>NETWORK TRAFFIC</label>
+                <div class="progress-bar"><div id="traffic-bar" class="progress-fill" style="width: 0%"></div></div>
+            </div>
+            <div class="vital-item">
+                <label>VECTOR SIMILARITY</label>
+                <div class="vital-value" id="vector-sim">0.00</div>
+            </div>
+            <div class="vital-item">
+                <label>ACTORS IDENTIFIED</label>
+                <div class="vital-value" id="actor-count">0</div>
+            </div>
+        </div>
+        
+        <div class="threat-overview">
+            <label>THREAT OVERVIEW</label>
+            <p id="threat-narrative">Autonomous monitoring active. No critical clusters detected in the current temporal window.</p>
+        </div>
+    </aside>
 
     <!-- Node Detail Panel -->
-    <div id="detail-panel" class="hidden">
+    <div id="detail-panel" class="glass-panel hidden">
         <div class="panel-header">
-            <h3 id="detail-title">Node Details</h3>
+            <h3 id="detail-title">ENTITY DETAILS</h3>
             <button id="detail-close" class="btn-close">✕</button>
         </div>
         <div id="detail-body"></div>
     </div>
 
     <!-- Legend -->
-    <div id="legend">
-        <div class="legend-title">Threat Level</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#3498db"></span> Low (&lt;30)</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#f39c12"></span> Medium (30-60)</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#e74c3c"></span> High (&gt;60)</div>
-        <div class="legend-sep"></div>
-        <div class="legend-title">Node Type</div>
-        <div class="legend-item"><span class="legend-shape" style="border-radius:50%"></span> IP</div>
-        <div class="legend-item"><span class="legend-shape" style="border-radius:4px"></span> Hostname</div>
-        <div class="legend-item"><span class="legend-shape diamond"></span> Process</div>
-        <div class="legend-item"><span class="legend-shape triangle"></span> User</div>
+    <div id="legend" class="glass-panel">
+        <div class="legend-row">
+            <div class="legend-item"><span class="legend-glow blue"></span> Low</div>
+            <div class="legend-item"><span class="legend-glow amber"></span> Medium</div>
+            <div class="legend-item"><span class="legend-glow red"></span> High</div>
+        </div>
     </div>
 
     <script src="/static/graph.js"></script>

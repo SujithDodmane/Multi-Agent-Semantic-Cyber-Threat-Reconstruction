@@ -28,6 +28,12 @@ dangerous_processes:
   - rubeus.exe
   - sharphound
   - sharphound.exe
+  - wevtutil
+  - wevtutil.exe
+  - vssadmin
+  - vssadmin.exe
+  - crypt0r
+  - crypt0r.exe
 
 # Known C2 (Command & Control) ports — each match adds +30 to severity score
 c2_ports:

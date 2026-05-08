@@ -116,7 +116,7 @@ def format_report_markdown(
             else:
                 value_fmt = value
             role_str = f" ({role})" if role else ""
-            sections.append(f"  • [{etype}] {value_fmt}{role_str}")
+            sections.append(f"  • {etype} {value_fmt}{role_str}")
         sections.append("")
 
     # --- MITRE ATT&CK ---

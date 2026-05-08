@@ -40,7 +40,7 @@ logger = logging.getLogger("aegis.embedding")
 # ─── Configuration ─────────────────────────────────────────────────────────
 
 MODEL_NAME = os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3")
-EMBEDDING_DIM = 384
+EMBEDDING_DIM = 1024
 MAX_TOKENS = 512
 BATCH_WINDOW_MS = int(os.getenv("BATCH_WINDOW_MS", "50"))
 MAX_BATCH_SIZE = int(os.getenv("MAX_BATCH_SIZE", "16"))

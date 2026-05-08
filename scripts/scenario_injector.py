@@ -74,13 +74,18 @@ def inject():
     print("\n--- Injection Complete ---")
 
 def process_batch(batch, phase_name):
+    # Reduce load: If it's a large batch of benign logs, sample them
+    if "BENIGN" in phase_name.upper() and len(batch) > 10:
+        batch = batch[::3] # Take every 3rd benign log
+        print(f" 🧪 Sampling benign batch (Reduced to {len(batch)} logs)")
+
     print(f" 📥 Ingesting {len(batch)} logs into pipeline...")
     with open(OUTPUT_FILE, "a") as f:
         for line in batch:
             f.write(line + "\n")
             f.flush()
-            time.sleep(0.05) # Small delay per log to avoid overwhelming buffers
-    time.sleep(3) # Wait for processing
+            time.sleep(0.8) # Increased delay significantly to reduce RAM pressure
+    time.sleep(5) # Wait longer for processing
 
 if __name__ == "__main__":
     inject()
