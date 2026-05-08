@@ -75,14 +75,17 @@ def main():
                 print(f"[ERROR] Failed to clear port {port}: {e}")
             
         print(f"[SVC] Starting {svc['name']} on port {port}...")
-        p = subprocess.Popen(svc['cmd'], creationflags=subprocess.CREATE_NEW_CONSOLE)
+        # Use cmd /c title to set the window title
+        full_cmd = ["cmd", "/c", "title", f"AEGIS - {svc['name']}", "&&"] + svc['cmd']
+        p = subprocess.Popen(full_cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
         processes.append(p)
         time.sleep(1)
 
     # 2. Start OpenClaw
     print("[BRAIN] Starting OpenClaw Orchestrator...")
     os.chdir("openclaw")
-    p_claw = subprocess.Popen(["npm", "start"], shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
+    full_claw_cmd = ["cmd", "/c", "title", "AEGIS - OPENCLAW ORCHESTRATOR", "&&", "npm", "start"]
+    p_claw = subprocess.Popen(full_claw_cmd, creationflags=subprocess.CREATE_NEW_CONSOLE)
     processes.append(p_claw)
     os.chdir("..")
 
