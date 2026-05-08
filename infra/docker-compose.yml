@@ -1,0 +1,96 @@
+# ==============================================================================
+# AEGIS Docker Compose — Development Configuration
+# ==============================================================================
+# Services correspond to the four architectural planes:
+#   Plane 1: ingestion (Python daemon)
+#   Plane 2: openclaw (Node.js orchestrator)
+#   Plane 3: embedding-service (FastAPI + CUDA), chromadb
+#   Plane 4: graph-ui (Flask + Cytoscape.js)
+# ==============================================================================
+
+version: "3.8"
+
+services:
+  # --- Plane 3: Vector Store ---
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: aegis-chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - chromadb_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+    restart: unless-stopped
+
+  # --- Plane 1: Ingestion Daemon ---
+  ingestion:
+    build:
+      context: ..
+      dockerfile: infra/dockerfiles/Dockerfile.ingestion
+    container_name: aegis-ingestion
+    volumes:
+      - ../logs:/app/logs:ro
+      - sqlite_data:/app/data
+      - cursor_data:/app/data/cursors
+    env_file:
+      - ../.env
+    depends_on:
+      - chromadb
+    restart: unless-stopped
+
+  # --- Plane 3: Embedding Service (GPU) ---
+  embedding-service:
+    build:
+      context: ..
+      dockerfile: infra/dockerfiles/Dockerfile.embedding
+    container_name: aegis-embedding
+    ports:
+      - "8001:8001"
+    volumes:
+      - sqlite_data:/app/data:ro
+    env_file:
+      - ../.env
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # --- Plane 2: OpenClaw Orchestrator ---
+  openclaw:
+    build:
+      context: ..
+      dockerfile: infra/dockerfiles/Dockerfile.openclaw
+    container_name: aegis-openclaw
+    ports:
+      - "3000:3000"
+    volumes:
+      - sqlite_data:/app/data:ro
+    env_file:
+      - ../.env
+    depends_on:
+      - chromadb
+      - embedding-service
+    restart: unless-stopped
+
+  # --- Plane 4: Knowledge Graph UI ---
+  graph-ui:
+    build:
+      context: ..
+      dockerfile: infra/dockerfiles/Dockerfile.graph
+    container_name: aegis-graph
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+    env_file:
+      - ../.env
+    restart: unless-stopped
+
+volumes:
+  chromadb_data:
+  sqlite_data:
+  cursor_data:

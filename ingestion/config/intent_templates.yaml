@@ -1,0 +1,101 @@
+# ==============================================================================
+# AEGIS Intent Templates — Synthetic Intent Translation Configuration
+# ==============================================================================
+# Purpose: Convert normalized JSON log entries into natural-language sentences
+# for optimal BGE-m3 embedding quality. This is the MOST IMPORTANT quality
+# mechanism in the entire ingestion pipeline.
+#
+# Template placeholders map to NormalizedLogEntry schema fields.
+# Null fields are substituted with 'unknown' at render time.
+# ==============================================================================
+
+# --- DNS anomaly detection threshold ---
+dns_entropy_threshold: 3.5
+
+# --- Web server process names (for parent process detection) ---
+web_server_processes:
+  - apache2
+  - apache2.exe
+  - nginx
+  - nginx.exe
+  - w3wp.exe
+  - tomcat
+  - httpd
+  - httpd.exe
+
+# --- Templates by event_type ---
+templates:
+  PROCESS_CREATION:
+    template: "User {user_account} executed {process_name} (spawned by {parent_process_name}) on {hostname}."
+    enrichments:
+      - condition: "command_line_args is not None"
+        append: " Command line arguments indicate {command_line_args}."
+      - condition: "parent_process_name in web_server_processes"
+        append: " Parent process is a web server — possible web shell execution."
+        mitre_technique_hint: "T1505.003"
+    priority: 1
+
+  NETWORK_CONNECTION:
+    template: "{process_name} on {hostname} initiated a network connection from {source_ip}:{source_port} to {dest_ip}:{dest_port}."
+    enrichments:
+      - condition: "dest_port == 443"
+        append: " Connection is HTTPS-encrypted."
+      - condition: "dest_ip is RFC1918 private"
+        append: " Destination is an internal host — possible lateral movement."
+        mitre_technique_hint: "T1021"
+    priority: 1
+
+  AUTHENTICATION_FAILURE:
+    template: "Authentication failure for user {user_account} on {hostname} from source {source_ip}."
+    enrichments:
+      - condition: "failure_count >= 5 in sliding window"
+        append: " This is failure number {failure_count} in the current window — possible brute force attack."
+        event_type_override: "AUTHENTICATION_FAILURE_BURST"
+    priority: 1
+
+  DNS_QUERY:
+    template: "{hostname} ({source_ip}) queried DNS for {dns_query}."
+    enrichments:
+      - condition: "domain_labels > 4 or entropy > dns_entropy_threshold"
+        append: " Domain has high entropy — possible DNS tunneling or DGA activity."
+        mitre_technique_hint: "T1071.004"
+    priority: 1
+
+  HTTP_REQUEST:
+    template: "{source_ip} made a {http_method} request to {http_url} on {hostname}."
+    enrichments:
+      - condition: "url contains SQL keywords (SELECT, UNION, DROP, INSERT)"
+        append: " URL contains SQL syntax — possible injection attempt."
+    priority: 1
+
+  FILE_WRITE:
+    template: "{process_name} wrote to file {file_path} on {hostname}."
+    enrichments:
+      - condition: "file_path in system directories (System32, /etc, /bin)"
+        append: " Target is a protected system directory — possible persistence mechanism."
+        mitre_technique_hint: "T1543"
+    priority: 1
+
+  # --- Fallback for unknown/unmatched event types ---
+  UNKNOWN:
+    template: "Security event of type {event_type} detected on {hostname} at {event_timestamp}. Raw event code: {event_code}."
+    enrichments: []
+    priority: 99
+
+# --- Temporal correlation windows (seconds) ---
+# Per-event-type override for ChromaDB temporal bounding.
+# Ref: §3.3 — "The time window of ±2 hours is configurable per event_type.
+# For fast-moving attack chains, ±30 minutes. For slow APT, ±24 hours."
+temporal_windows:
+  default: 7200                       # ±2 hours (default for most types)
+  PRIVILEGE_ESCALATION: 1800          # ±30 minutes (fast-moving)
+  EXFILTRATION_HINT: 1800             # ±30 minutes (fast-moving)
+  LATERAL_MOVEMENT_HINT: 1800         # ±30 minutes (fast-moving)
+  PROCESS_CREATION: 3600              # ±1 hour
+  NETWORK_CONNECTION: 7200            # ±2 hours (default)
+  DNS_QUERY: 21600                    # ±6 hours (slow/low APT)
+  AUTHENTICATION_FAILURE: 14400       # ±4 hours (brute force campaigns)
+  AUTHENTICATION_FAILURE_BURST: 3600  # ±1 hour
+  HTTP_REQUEST: 7200                  # ±2 hours (default)
+  FILE_WRITE: 3600                    # ±1 hour
+

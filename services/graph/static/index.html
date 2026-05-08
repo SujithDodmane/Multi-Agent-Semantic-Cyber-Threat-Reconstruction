@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEGIS — Threat Knowledge Graph</title>
+    <meta name="description" content="Real-time threat investigation knowledge graph powered by AEGIS multi-agent semantic analysis">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/cytoscape@3.30.4/dist/cytoscape.min.js"></script>
+    <script src="https://unpkg.com/cytoscape-cose-bilkent@4.1.0/cytoscape-cose-bilkent.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header id="header">
+        <div class="header-left">
+            <h1>🛡 AEGIS</h1>
+            <span class="subtitle">Threat Knowledge Graph</span>
+        </div>
+        <div class="header-center">
+            <div class="stat-badge" id="stat-nodes">
+                <span class="stat-label">Nodes</span>
+                <span class="stat-value" id="node-count">0</span>
+            </div>
+            <div class="stat-badge" id="stat-edges">
+                <span class="stat-label">Edges</span>
+                <span class="stat-value" id="edge-count">0</span>
+            </div>
+            <div class="stat-badge" id="stat-status">
+                <span class="stat-label">Status</span>
+                <span class="stat-value" id="ws-status">Connecting...</span>
+            </div>
+        </div>
+        <div class="header-right">
+            <button id="btn-layout-cose" class="btn active" title="Force-directed cluster layout">CoSE</button>
+            <button id="btn-layout-bfs" class="btn" title="Timeline DAG layout">BFS</button>
+            <button id="btn-fit" class="btn" title="Fit graph to screen">Fit</button>
+            <button id="btn-clear" class="btn btn-danger" title="Clear graph">Clear</button>
+        </div>
+    </header>
+
+    <!-- Graph Canvas -->
+    <div id="cy"></div>
+
+    <!-- Node Detail Panel -->
+    <div id="detail-panel" class="hidden">
+        <div class="panel-header">
+            <h3 id="detail-title">Node Details</h3>
+            <button id="detail-close" class="btn-close">✕</button>
+        </div>
+        <div id="detail-body"></div>
+    </div>
+
+    <!-- Legend -->
+    <div id="legend">
+        <div class="legend-title">Threat Level</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#3498db"></span> Low (&lt;30)</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#f39c12"></span> Medium (30-60)</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#e74c3c"></span> High (&gt;60)</div>
+        <div class="legend-sep"></div>
+        <div class="legend-title">Node Type</div>
+        <div class="legend-item"><span class="legend-shape" style="border-radius:50%"></span> IP</div>
+        <div class="legend-item"><span class="legend-shape" style="border-radius:4px"></span> Hostname</div>
+        <div class="legend-item"><span class="legend-shape diamond"></span> Process</div>
+        <div class="legend-item"><span class="legend-shape triangle"></span> User</div>
+    </div>
+
+    <script src="/static/graph.js"></script>
+</body>
+</html>

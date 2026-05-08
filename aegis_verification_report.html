@@ -1,0 +1,264 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+.section{margin-bottom:2rem}
+.section-title{font-size:18px;font-weight:500;color:var(--color-text-primary);margin-bottom:1rem;padding-bottom:.5rem;border-bottom:.5px solid var(--color-border-tertiary)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px}
+.card{background:var(--color-background-primary);border:.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.25rem}
+.metric-card{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.875rem 1rem;text-align:center}
+.metric-label{font-size:12px;color:var(--color-text-secondary);margin-bottom:4px}
+.metric-val{font-size:22px;font-weight:500;color:var(--color-text-primary)}
+.badge{display:inline-block;font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px}
+.badge-pass{background:var(--color-background-success);color:var(--color-text-success)}
+.badge-warn{background:var(--color-background-warning);color:var(--color-text-warning)}
+.badge-fail{background:var(--color-background-danger);color:var(--color-text-danger)}
+.badge-info{background:var(--color-background-info);color:var(--color-text-info)}
+.check-row{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:.5px solid var(--color-border-tertiary);font-size:13px}
+.check-row:last-child{border-bottom:none}
+.check-icon{font-size:15px;flex-shrink:0;margin-top:1px}
+.check-main{flex:1;color:var(--color-text-primary)}
+.check-sub{font-size:12px;color:var(--color-text-secondary);margin-top:2px}
+.check-badge{flex-shrink:0}
+.issue-card{background:var(--color-background-primary);border-radius:var(--border-radius-md);border:.5px solid var(--color-border-tertiary);border-left:3px solid;padding:.875rem 1rem;margin-bottom:.75rem}
+.issue-card.warn{border-left-color:#BA7517}
+.issue-card.fail{border-left-color:#A32D2D}
+.issue-card.ok{border-left-color:#3B6D11}
+.issue-card.info{border-left-color:#185FA5}
+.issue-title{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:4px}
+.issue-body{font-size:12px;color:var(--color-text-secondary);line-height:1.6}
+.verdict-box{background:var(--color-background-secondary);border:.5px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:1.25rem 1.5rem}
+.ver-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:.5px solid var(--color-border-tertiary);font-size:13px}
+.ver-row:last-child{border-bottom:none}
+.ver-label{color:var(--color-text-secondary)}
+.ver-val{font-weight:500;color:var(--color-text-primary)}
+.top-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.75rem;padding-bottom:1rem;border-bottom:.5px solid var(--color-border-secondary)}
+.top-title{font-size:22px;font-weight:500;color:var(--color-text-primary)}
+.top-sub{font-size:13px;color:var(--color-text-secondary);margin-top:2px}
+.tag-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+</style>
+
+<div style="padding:1.25rem 0">
+
+<div class="top-bar">
+  <div>
+    <div class="top-title">AEGIS — System Verification Report</div>
+    <div class="top-sub">Cross-referenced against implementation methodology & updated documentation</div>
+  </div>
+  <div style="text-align:right">
+    <span class="badge badge-warn" style="font-size:13px;padding:4px 14px">Conditionally Ready</span>
+    <div style="font-size:11px;color:var(--color-text-secondary);margin-top:4px">3 issues require attention</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Overall Diagnostic Summary</div>
+  <div class="grid4">
+    <div class="metric-card">
+      <div class="metric-label">Diagnostic tests</div>
+      <div class="metric-val" style="color:#3B6D11">24/24</div>
+      <div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">All passed</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Total unit tests</div>
+      <div class="metric-val" style="color:#3B6D11">227</div>
+      <div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">0 failures</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Phases complete</div>
+      <div class="metric-val" style="color:#3B6D11">6/6</div>
+      <div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">All methodology phases</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Critical issues</div>
+      <div class="metric-val" style="color:#A32D2D">3</div>
+      <div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">Need pre-demo fix</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Phase-by-Phase Verification</div>
+  <div class="grid2">
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+        <div style="font-size:14px;font-weight:500">Phase 0 — Environment & Repo</div>
+        <span class="badge badge-pass">PASS</span>
+      </div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Monorepo 4-plane structure<div class="check-sub">schemas/, infra/, tests/ all present</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Docker Compose (5 services)<div class="check-sub">Matches §0.2 exactly</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Seccomp profile defined<div class="check-sub">Blocks fork/exec/network/mount</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">GitHub Actions CI pipeline<div class="check-sub">Lint + schema validation + unit tests</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Intent templates YAML + threat_lists.yaml<div class="check-sub">Configurable, not hardcoded</div></div></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+        <div style="font-size:14px;font-weight:500">Phase 1 — Ingestion & Normalization</div>
+        <span class="badge badge-pass">PASS</span>
+      </div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Synthetic intent translation<div class="check-sub">6 event types + fallback, zero ML</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Shannon entropy (DNS DGA) threshold 3.5<div class="check-sub">Configurable in YAML</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Null field → "unknown" substitution<div class="check-sub">No KeyError crashes on missing fields</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">SQLite WAL + SHA-256 chain of custody<div class="check-sub">Indexes on timestamp, IP, process</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Priority queue P0/P1/P2/BENIGN + backpressure<div class="check-sub">P2 drop at depth >50, P0/P1 never dropped</div></div></div>
+      <div style="margin-top:.5rem"><span class="badge badge-info">34 tests passed</span></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+        <div style="font-size:14px;font-weight:500">Phase 2 — OpenClaw Orchestration</div>
+        <span class="badge badge-pass">PASS</span>
+      </div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">HEARTBEAT.md non-blocking 200ms poll<div class="check-sub">Node.js stays unblocked during LLM waits</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">All 3 SKILL.md contracts implemented<div class="check-sub">Input/output/failure schemas match §2.2–3.4</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Cognitive RAM (file-backed JSON, UUID-scoped)<div class="check-sub">IP activity counters expire after 4h</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Schema sync: Pydantic → prompt schema programmatic<div class="check-sub">model.schema() prevents drift — TABLE 15 pitfall closed</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">MITRE ATT&CK table embedded in system prompt<div class="check-sub">10 technique IDs; model constrained to this list only</div></div></div>
+      <div style="margin-top:.5rem"><span class="badge badge-info">78 tests passed</span></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+        <div style="font-size:14px;font-weight:500">Phase 3 — Semantic Correlation Engine</div>
+        <span class="badge badge-pass">PASS</span>
+      </div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Dynamic batching (50ms window)<div class="check-sub">~16x throughput gain vs single-request</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Temporal pre-filter (not post-filter)<div class="check-sub">Per-event-type windows (±30min to ±6hr)</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">ChromaDB HNSW ef=200, M=48<div class="check-sub">Dual-collection hot/cold with hourly migration</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">4 circuit breakers (embedding, Ollama, ChromaDB, correlation)<div class="check-sub">threshold=3, recovery=60s, 400s excluded</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">DLQ retry: 5min interval, 3 max, P1 re-submit<div class="check-sub">Exhausted → resolved=false + analyst escalation</div></div></div>
+      <div style="margin-top:.5rem"><span class="badge badge-info">122 tests passed</span></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+        <div style="font-size:14px;font-weight:500">Phase 4 — Output & Knowledge Graph</div>
+        <span class="badge badge-pass">PASS</span>
+      </div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">4096-char Telegram chunking at section boundaries<div class="check-sub">Part indicator (1/N) headers on each chunk</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">WebSocket delta push (not full graph)<div class="check-sub">Initial full sync; thereafter only new nodes/edges</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Cytoscape.js CoSE-Bilkent + BFS toggle<div class="check-sub">Node threat coloring: blue/amber/red by score</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Node flash/pulse animations for live updates<div class="check-sub">Visual feedback during live investigations</div></div></div>
+      <div style="margin-top:.5rem"><span class="badge badge-info">166 tests passed (cumulative)</span></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+        <div style="font-size:14px;font-weight:500">Phase 5 & 6 — Testing & Demo</div>
+        <span class="badge badge-pass">PASS</span>
+      </div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Queue stress test: 5,000 async entries<div class="check-sub">P0/P1 zero-drop guaranteed under load</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">TF-IDF keyword baseline implemented<div class="check-sub">P@10, R@10, MAP metrics ready for ablation comparison</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">baseline_generator.py + demo_injector.py<div class="check-sub">Interactive paced demo: webshell + dns scenarios</div></div></div>
+      <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Telegram live auth validated (.env credentials)<div class="check-sub">getMe + sendMessage confirmed against live API</div></div></div>
+      <div style="margin-top:.5rem"><span class="badge badge-info">227 passed + 3 live API tests</span></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Issues Found — Pre-Demo Action Required</div>
+
+  <div class="issue-card fail">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+      <div class="issue-title">🔴 Critical — Embedding dimension mismatch: 384 vs 1024</div>
+      <span class="badge badge-fail">Must Fix</span>
+    </div>
+    <div class="issue-body">
+      The diagnostic log shows <strong style="color:var(--color-text-primary)">device=cpu</strong> and <strong style="color:var(--color-text-primary)">dim=1024</strong>. The entire methodology was designed around BGE-m3 outputting 384-dimensional vectors — the ChromaDB collection was initialized with ef=200/M=48 tuned for 384-dim, the cosine similarity threshold of 0.72 was calibrated for 384-dim space, and the ingestion pipeline schema specifies 384-dim. The startup auto-detected and updated the dimension, but there is no evidence the ChromaDB collection was re-initialized with HNSW parameters appropriate for 1024-dim vectors. A 1024-dim index with parameters tuned for 384-dim will have degraded recall. Additionally — and more urgently — the system is running BGE-m3 on <strong style="color:var(--color-text-primary)">CPU, not GPU (CUDA)</strong>. The methodology explicitly requires CUDA acceleration for the 50ms dynamic batching window to be meaningful. On CPU, a single BGE-m3 embedding at 1024 dimensions takes 400–1200ms. The sub-second triage claim collapses immediately under any real log volume.
+      <br><br><strong style="color:var(--color-text-primary)">Required action:</strong> Confirm whether CUDA is available on the demo machine. If GPU is present, verify PyTorch is using it (torch.cuda.is_available() must return True). If demo hardware is CPU-only, re-scope the latency claims in your presentation to match CPU reality — do not demo at high log injection rates, slow down the demo_injector.py injection pace so the queue never saturates. Re-verify the ChromaDB HNSW parameters are set for 1024-dim (consider reducing M to 32 for faster build at the same recall).
+    </div>
+  </div>
+
+  <div class="issue-card fail">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+      <div class="issue-title">🔴 Critical — Cold-start ChromaDB during live demo</div>
+      <span class="badge badge-fail">Must Fix Before Demo</span>
+    </div>
+    <div class="issue-body">
+      The 3-agent chain execution log shows <strong style="color:var(--color-text-primary)">Correlation SKILL: Cluster size: 0, Cold start: true</strong>. This means the live demo, as currently run, produced a cold-start narrative with confidence 0.4 — not the semantic correlation showcase the demo is meant to deliver. The forensic narrative generated during this run was based solely on the triggering log, not on a cluster of correlated historical events. A judge watching this demo sees no evidence that the semantic embedding and HNSW retrieval is actually doing anything useful.
+      <br><br><strong style="color:var(--color-text-primary)">Required action:</strong> Run <code>python scripts/baseline_generator.py</code> to pre-seed ChromaDB with 500 benign baseline entries before any demo run. Then inject at least 3–4 related attack-chain logs (e.g. the webshell scenario from §6.2) with 30–60 second gaps so they land in the same temporal window. Only then inject the final triggering event. At that point the Correlation SKILL should return a non-zero cluster and the confidence score should be above 0.7. Archive the pre-seeded ChromaDB volume and restore it at the start of every demo run as specified in §6.1.
+    </div>
+  </div>
+
+  <div class="issue-card warn">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+      <div class="issue-title">🟡 Warning — Qwen 2.5:3b-instruct is below the specified model</div>
+      <span class="badge badge-warn">Verify Before Demo</span>
+    </div>
+    <div class="issue-body">
+      The diagnostic and walkthrough logs confirm the running model is <strong style="color:var(--color-text-primary)">qwen2.5:3b-instruct</strong>. The methodology specifies <strong style="color:var(--color-text-primary)">Qwen 2.5-7B-Q4_K_M</strong> as the minimum viable model for structured forensic narrative generation. The 3B parameter model is approximately 60% the capacity of the 7B. While 3B may produce acceptable narratives for simple single-event logs, it is significantly more likely to produce malformed JSON (triggering the Pydantic retry chain), fabricate MITRE ATT&CK technique IDs outside the provided reference table, and generate vague or repetitive narratives for multi-event correlated clusters. The ablation test results and confidence scores captured during testing reflect 3B performance, not 7B.
+      <br><br><strong style="color:var(--color-text-primary)">Required action:</strong> If demo hardware has at least 8GB VRAM, pull and switch to qwen2.5:7b-instruct via Ollama. If constrained to CPU or <8GB VRAM, acknowledge this as a hardware limitation in the presentation and note it would use the 7B model in production deployment. Do not present 3B results as representative of the architected system's capability.
+    </div>
+  </div>
+
+  <div class="issue-card info">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+      <div class="issue-title">🔵 Note — Knowledge graph screenshot shows "unknown" node</div>
+      <span class="badge badge-info">Polish</span>
+    </div>
+    <div class="issue-body">
+      The graph visualization shows a node labeled <strong style="color:var(--color-text-primary)">"unknown"</strong> with a blue low-threat coloring. This is the null-field substitution from the ingestion layer working correctly — a field that was missing in the log entry was substituted with "unknown". However, displaying "unknown" as a named entity in the knowledge graph is confusing to a judge: it looks like a bug rather than an intentional fallback. The entity resolution layer should suppress node creation for entities where the resolved value is the string "unknown" — or alternatively label them "unresolved entity" with a distinct visual style (dashed border, gray fill) to make the fallback semantically clear.
+    </div>
+  </div>
+
+  <div class="issue-card ok">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+      <div class="issue-title">✅ Confirmed — All methodology §0–6 checklist items resolved</div>
+      <span class="badge badge-pass">Verified</span>
+    </div>
+    <div class="issue-body">
+      Every item from the implementation methodology checklist tables (TABLE 10 through TABLE 14) has been verified as implemented by the phase walkthroughs. Schema version handoff manifest, RBAC per skill, DLQ retry scheduler, sentence-boundary truncation, temporal pre-filter as pre-filter (not post-filter), Pydantic↔prompt schema sync via model.schema() — all confirmed present and tested.
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Architecture Compliance — Key Decisions Verified</div>
+  <div class="card">
+    <div class="ver-row"><span class="ver-label">OpenClaw orchestrator language</span><span class="ver-val">Node.js / TypeScript ✓ <span class="badge badge-pass">correct</span></span></div>
+    <div class="ver-row"><span class="ver-label">Python FastAPI compute backend boundary</span><span class="ver-val">Confirmed with circuit breaker ✓</span></div>
+    <div class="ver-row"><span class="ver-label">Synthetic intent embedded, not raw JSON</span><span class="ver-val">intent_translator.py confirmed ✓</span></div>
+    <div class="ver-row"><span class="ver-label">Cosine similarity threshold 0.72</span><span class="ver-val">Applied in correlation service ✓</span></div>
+    <div class="ver-row"><span class="ver-label">Temporal window as ChromaDB pre-filter</span><span class="ver-val">where clause metadata filter ✓</span></div>
+    <div class="ver-row"><span class="ver-label">Pydantic schema generated from model, not hand-written</span><span class="ver-val">model.schema() in synthesizer ✓ — drift impossible</span></div>
+    <div class="ver-row"><span class="ver-label">Prompt injection sanitizer</span><span class="ver-val">sanitizer.py in Plane 1 ✓</span></div>
+    <div class="ver-row"><span class="ver-label">SHA-256 verified on every SQLite retrieval</span><span class="ver-val">db.py confirmed ✓</span></div>
+    <div class="ver-row"><span class="ver-label">Single-worker queue → no parallel Ollama inference</span><span class="ver-val">asyncio.PriorityQueue single consumer ✓</span></div>
+    <div class="ver-row"><span class="ver-label">BGE-m3 device at runtime</span><span class="ver-val"><span class="badge badge-fail">CPU (not CUDA)</span> — see critical issue #1</span></div>
+    <div class="ver-row"><span class="ver-label">LLM model spec</span><span class="ver-val"><span class="badge badge-warn">3b-instruct (spec: 7B-Q4_K_M)</span> — see warning</span></div>
+    <div class="ver-row"><span class="ver-label">ChromaDB seeded for correlation demo</span><span class="ver-val"><span class="badge badge-fail">Cold start (cluster=0)</span> — see critical issue #2</span></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Pre-Demo Checklist</div>
+  <div class="card">
+    <div class="check-row"><span class="check-icon" style="color:#A32D2D">○</span><div class="check-main">Verify CUDA availability on demo machine (torch.cuda.is_available())<div class="check-sub">If False, adjust demo pace and update latency claims</div></div><span class="check-badge"><span class="badge badge-fail">Blocking</span></span></div>
+    <div class="check-row"><span class="check-icon" style="color:#A32D2D">○</span><div class="check-main">Run baseline_generator.py, archive ChromaDB volume, restore before each run<div class="check-sub">Cold-start demo is not a demo of the system's core value</div></div><span class="check-badge"><span class="badge badge-fail">Blocking</span></span></div>
+    <div class="check-row"><span class="check-icon" style="color:#A32D2D">○</span><div class="check-main">Re-check ChromaDB HNSW params for 1024-dim (not 384-dim)<div class="check-sub">ef_construction=200, M=32–48 for 1024-dim</div></div><span class="check-badge"><span class="badge badge-fail">Blocking</span></span></div>
+    <div class="check-row"><span class="check-icon" style="color:#BA7517">○</span><div class="check-main">Pull qwen2.5:7b-instruct if VRAM allows, else document hardware constraint<div class="check-sub">3B model may produce lower-quality narratives on complex clusters</div></div><span class="check-badge"><span class="badge badge-warn">Important</span></span></div>
+    <div class="check-row"><span class="check-icon" style="color:#BA7517">○</span><div class="check-main">Suppress or restyle "unknown" graph nodes<div class="check-sub">Null-field entities should be visually distinct, not named "unknown"</div></div><span class="check-badge"><span class="badge badge-warn">Polish</span></span></div>
+    <div class="check-row"><span class="check-icon" style="color:#185FA5">○</span><div class="check-main">Do a full rehearsal end-to-end using demo_injector.py --scenario webshell<div class="check-sub">Time from log injection to Telegram alert — confirm <60s on demo hardware</div></div><span class="check-badge"><span class="badge badge-info">Rehearse</span></span></div>
+    <div class="check-row"><span class="check-icon" style="color:#185FA5">○</span><div class="check-main">Confirm Telegram bot token and chat ID in .env are production credentials<div class="check-sub">Not the test bot — judges need to see the alert arrive live</div></div><span class="check-badge"><span class="badge badge-info">Verify</span></span></div>
+    <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">All 227 tests green, all 6 phases complete<div class="check-sub">Full regression suite passing</div></div><span class="check-badge"><span class="badge badge-pass">Done</span></span></div>
+    <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Demo scripts (baseline_generator.py + demo_injector.py) built<div class="check-sub">Interactive paced injection ready for both scenarios</div></div><span class="check-badge"><span class="badge badge-pass">Done</span></span></div>
+    <div class="check-row"><span class="check-icon" style="color:#3B6D11">✓</span><div class="check-main">Telegram live API credentials confirmed working<div class="check-sub">getMe + sendMessage both verified against live bot</div></div><span class="check-badge"><span class="badge badge-pass">Done</span></span></div>
+  </div>
+</div>
+
+<div class="verdict-box">
+  <div style="font-size:15px;font-weight:500;color:var(--color-text-primary);margin-bottom:.75rem">Final Verdict</div>
+  <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.7">
+    The system is <strong style="color:var(--color-text-primary)">architecturally complete and fully tested</strong> — 227 tests pass, all 6 methodology phases are implemented, and every checklist item from the specification is verified. The engineering quality is high.
+    <br><br>
+    However, there are <strong style="color:#A32D2D">two demo-breaking issues</strong> that will prevent the system from demonstrating its core value proposition to judges: the ChromaDB is cold (no semantic correlation will be shown), and BGE-m3 is running on CPU (latency claims cannot be demonstrated). These are not code bugs — they are runtime environment gaps that take under an hour to resolve. Fix these before the demo and the system is in strong shape for a competitive submission.
+  </div>
+</div>
+
+</div>

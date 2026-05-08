@@ -1,0 +1,354 @@
+
+
+AEGIS
+Multi-Agent Semantic Threat Evaluation & Reconstruction
+Complete Implementation Methodology
+
+
+RV College of Engineering  •  PRISM Hackathon 2026  •  Cognitive Ops Team
+
+Document Overview & Purpose
+This document is the step-by-step implementation guide for AEGIS. It covers every implementation decision from initial environment setup through final demo submission — including the rationale behind each choice, what engineers must watch out for at each stage, and precisely where the system can fail and how to prevent it.
+Each section corresponds to a concrete build stage. The order is strictly sequential: later stages depend on earlier ones being fully functional. Do not compress phases. The most common hackathon failure mode is skipping to the 'interesting' AI work before the plumbing underneath it is solid.
+
+
+
+
+
+0.1 Repository Layout
+Establish a monorepo structure on Day 1. Everything lives under one Git root. This is not optional — a fragmented repo with separate Node.js and Python roots will cause CI/CD pain and inter-service path resolution bugs during the demo.
+The top-level structure must contain four directories corresponding to the four architectural planes: ingestion/ (Python daemon and normalization scripts), openclaw/ (the Node.js OpenClaw project with all SKILL.md files and the HEARTBEAT.md config), services/ (FastAPI embedding service, graph WebSocket server, Flask UI server), and infra/ (Docker Compose files, GitHub Actions workflows, seccomp profiles). A shared schemas/ directory at the root holds the canonical JSON schema definitions that all planes reference. This shared schema directory is the single source of truth — any change to log field names happens here and propagates everywhere.
+
+0.2 Docker Compose Architecture
+Every service runs in its own Docker container from the first day of development. The temptation to 'run locally first and Dockerize later' must be resisted — environment differences between development and demo have killed more hackathon projects than any technical bug.
+Define five services in the Compose file: openclaw (Node.js image), ingestion (Python image), embedding-service (Python image with CUDA runtime for GPU access), chromadb (official ChromaDB image), and graph-ui (Python image for Flask + Cytoscape.js). The SQLite database file is mounted as a named volume shared between the ingestion and embedding-service containers. ChromaDB persists its index to a named volume as well. All skill containers launched by OpenClaw inherit read-only filesystem mounts — they can read from shared volumes but cannot write to any path outside an explicitly defined output directory.
+
+0.3 Seccomp Profiles & Sandbox Enforcement
+The 'isolated sandbox' claim in the architecture requires explicit implementation. A seccomp (secure computing mode) profile restricts which Linux kernel syscalls a container's process is permitted to make. For AEGIS skills, the profile must block: fork/exec of arbitrary processes, network socket creation (skills have no legitimate need to open outbound connections), and filesystem operations outside the defined read-only mounts.
+Write the seccomp JSON profile in infra/seccomp/ and reference it in the Compose service definition under security_opt. Test the profile by attempting a network call from inside a skill container — it must be denied at the kernel level, not just filtered by application logic.
+
+0.4 GitHub Actions CI Pipeline
+Configure two workflow triggers: on push to any feature branch (runs linting and unit tests on the ingestion normalization layer), and on pull request to main (runs the full integration test suite plus Docker build validation). The CI pipeline must validate that the shared schema definitions in schemas/ are consistent with what each service expects. A schema drift between planes — where the ingestion daemon emits a field the OpenClaw SKILL.md does not expect — is a bug that will surface at 2am during integration, not during development. Automated schema validation catches it early.
+
+
+
+
+1.1 File-Tailing Mechanism
+The Python watchdog library monitors configured directories for file modification events. When a monitored log file is written to, the daemon's event handler is triggered. The critical implementation detail is maintaining a file position cursor per monitored file — the daemon must read only new bytes since the last read, not re-process the entire file from the beginning on each event. This cursor is persisted to disk (a simple JSON file per monitored path) so that a daemon restart does not cause duplicate log processing.
+The daemon must handle log rotation — when a log file is truncated or replaced (common in Linux syslog rotation), the cursor must reset to position 0 for the new file inode. The watchdog FileMovedEvent and FileDeletedEvent handlers must reset the cursor and re-register the new file path.
+What to watch out for: log files written in large batches (e.g., during a port scan generating thousands of firewall entries per second). The event handler must not process entries synchronously — it must read available lines, push them to an internal buffer, and return immediately so the watchdog thread is never blocked.
+
+1.2 Log Type Identification
+Before normalization can occur, the daemon must reliably identify what kind of log it is reading. This identification must be deterministic and fast — zero ML, zero heuristics. The identification logic uses a combination of file path patterns and field signature matching.
+File path patterns: if the monitored path contains 'sysmon' or 'Microsoft-Windows-Sysmon', the log is a Windows Sysmon event log. If it contains 'zeek' or 'bro', it is Zeek network logs. If it contains 'firewall' or 'pf', it is a firewall log.
+Field signature matching: once a line is parsed as JSON (or key=value pairs for formats like CEF), the daemon checks for the presence of discriminating fields. Windows Event Log entries contain an EventID field. Zeek logs contain a _path field identifying the log stream (e.g., 'conn', 'dns', 'http'). Syslog entries follow RFC 5424 header patterns. Build a small identification registry: a priority-ordered list of (field_name, expected_values) tuples that short-circuits on the first match.
+What to watch out for: log entries that arrive malformed — truncated JSON, encoding issues in process names containing Unicode, or Windows log entries with nested escaped XML. The identification layer must be wrapped in exception handling that routes unparseable entries to a dedicated 'malformed' queue for later manual review rather than crashing the daemon.
+
+1.3 Normalization to Canonical JSON Schema
+Every log type, regardless of origin, must be transformed into the canonical NormalizedLogEntry schema before leaving Plane 1. This schema is defined in schemas/normalized_log.json and is the immutable contract between Plane 1 and all downstream planes.
+The canonical schema contains these mandatory fields: log_uuid (UUID4 generated at ingestion time), ingestion_timestamp (ISO8601 UTC), event_timestamp (parsed from the log source, or set to ingestion_timestamp if absent), source_ip, dest_ip, source_port, dest_port, process_name, parent_process_name, user_account, event_type (a taxonomy string, see below), event_code (the original numeric code from the source system), hostname, sha256_hash (of the raw payload), raw_payload (original log line, stored verbatim), and synthetic_intent (the human-readable sentence — described in Section 1.4).
+Optional fields that are populated when available: file_path, registry_key, command_line_args, dns_query, http_url, http_method, bytes_sent, bytes_received, and mitre_technique_hint (populated by the translation template if the log type strongly implies a specific technique).
+Event type taxonomy is a flat string enum, not free text: PROCESS_CREATION, NETWORK_CONNECTION, FILE_WRITE, FILE_DELETE, REGISTRY_WRITE, DNS_QUERY, HTTP_REQUEST, AUTHENTICATION_SUCCESS, AUTHENTICATION_FAILURE, PRIVILEGE_ESCALATION, SERVICE_INSTALL, SCHEDULED_TASK, LATERAL_MOVEMENT_HINT, EXFILTRATION_HINT, UNKNOWN.
+
+1.4 Synthetic Intent Translation — The Core Quality Mechanism
+This is the most important implementation step in the entire ingestion pipeline. Its purpose is to convert the machine-readable canonical JSON into a natural-language sentence that BGE-m3 can embed with maximum semantic precision.
+
+Why This Matters
+BGE-m3 is a natural language model trained on human text. When it receives a raw JSON object like {"event.code": 3, "process.name": "powershell.exe", "dest": "10.0.0.5"}, it encodes the syntactic structure of JSON notation — curly braces, quotes, colons — as part of the semantic signal. Two logs that describe the same behavioral event but use different field names or value formats will produce vectors that are further apart than they should be. Conversely, a sentence like "powershell.exe initiated a network connection to 10.0.0.5" produces a vector in the region of the embedding space where 'remote command execution' and 'C2 beaconing' live — exactly where the correlation query needs to search.
+The translation requires zero machine learning. It is implemented as a Python dictionary of templates, one per log type, using f-string interpolation. The translation happens after normalization but before SHA-256 hashing and queue insertion. The resulting synthetic_intent string is stored in the canonical schema and is the field that gets embedded by BGE-m3 — not the JSON.
+
+Translation Template Architecture
+The template configuration lives in a YAML file: ingestion/config/intent_templates.yaml. The file is organized by event_type taxonomy string. Each entry contains a template string with named placeholders corresponding to canonical schema fields, a priority integer (used when multiple templates could match), and an optional mitre_technique_hint string.
+For PROCESS_CREATION events (Windows Event ID 4688 / Sysmon Event ID 1): the template is "User {user_account} executed {process_name} (spawned by {parent_process_name}) on {hostname}." Optional enrichment: if command_line_args is populated, the template appends " Command line arguments indicate {command_line_args}.". If the parent process is a known web server (apache2, nginx, w3wp.exe, tomcat), the template additionally appends " Parent process is a web server — possible web shell execution." and sets mitre_technique_hint to T1505.003.
+For NETWORK_CONNECTION events (Sysmon Event ID 3): the template is "{process_name} on {hostname} initiated a network connection from {source_ip}:{source_port} to {dest_ip}:{dest_port}.". If dest_port is 443, append " Connection is HTTPS-encrypted." If dest_ip is in a private RFC1918 range, append " Destination is an internal host — possible lateral movement." and set mitre_technique_hint to T1021.
+For AUTHENTICATION_FAILURE events (Windows Event ID 4625): the template is "Authentication failure for user {user_account} on {hostname} from source {source_ip}." If five or more failures are detected for the same user within the sliding window, a separate enrichment step (in Section 1.5) adds " This is failure number N in the current window — possible brute force attack." and sets event_type to AUTHENTICATION_FAILURE_BURST.
+For DNS_QUERY events (Zeek dns.log): the template is "{hostname} ({source_ip}) queried DNS for {dns_query}.". If the queried domain contains more than four labels (subdomains) or has an entropy score above 3.5 (computable with a simple Shannon entropy function in pure Python), append " Domain has high entropy — possible DNS tunneling or DGA activity." and set mitre_technique_hint to T1071.004.
+For HTTP_REQUEST events (Zeek http.log): the template is "{source_ip} made a {http_method} request to {http_url} on {hostname}.". If the URL contains SQL keywords (SELECT, UNION, DROP, INSERT), append " URL contains SQL syntax — possible injection attempt."
+For FILE_WRITE events (Sysmon Event ID 11): the template is "{process_name} wrote to file {file_path} on {hostname}.". If the file path is in a system directory (System32, /etc, /bin), append " Target is a protected system directory — possible persistence mechanism." and set mitre_technique_hint to T1543.
+
+Template Fallback Handling
+Not all log entries will match a defined template. For entries where event_type is UNKNOWN or where mandatory template placeholders are missing (e.g., a network connection log without a dest_ip), the fallback template is: "Security event of type {event_type} detected on {hostname} at {event_timestamp}. Raw event code: {event_code}." This fallback is intentionally generic — it will still produce a useful embedding in the 'generic security event' region of the vector space, which is far better than embedding raw JSON.
+What to watch out for: template placeholders referencing fields that are null or empty. The template renderer must substitute null fields with the string 'unknown' rather than leaving Python f-string formatting to raise a KeyError. A missing parent_process_name renders as 'spawned by unknown' rather than crashing the daemon.
+
+Entropy Computation for DNS Anomaly Detection
+The Shannon entropy of a string is computed as the sum over all unique characters of -(probability * log2(probability)). For DNS domains, compute entropy only on the hostname labels (stripping the TLD). Legitimate domain names like 'google.com' have entropy around 2.5–3.0. DGA-generated domains like 'xkzqwpmn.ru' have entropy above 4.0. The threshold of 3.5 is a reasonable starting point — it will produce some false positives on legitimate CDN subdomains but will catch most DGA activity. The threshold should be configurable in intent_templates.yaml so it can be tuned without code changes.
+
+1.5 SHA-256 Hashing & SQLite Archival
+After normalization and synthetic intent generation, every log entry receives a SHA-256 hash of its raw_payload field. This hash is the chain-of-custody anchor. It proves that the raw log, as stored in SQLite, has not been modified since ingestion. If the hash of the stored raw_payload does not match the stored sha256_hash value, the log entry must be flagged as tampered.
+The SQLite database uses Write-Ahead Logging (WAL) mode. WAL allows concurrent readers to access the database while the ingestion daemon is writing — this is critical because the Correlation SKILL.md (in Plane 3) may need to read raw log entries from SQLite while new entries are being written. Without WAL mode, SQLite's default locking will cause the reader to block, introducing latency spikes into the agent chain.
+SQLite table design: the primary table is log_entries with columns for all canonical schema fields. Create indexes on event_timestamp (for temporal queries), source_ip (for IP pivot queries), and process_name (for process pivot queries). Do not index sha256_hash — it is only ever queried by exact match, and a full table scan on a hash column is fast enough for forensic lookups.
+
+1.6 Priority Queue Insertion
+After SQLite archival, the canonical entry is pushed to the asyncio.PriorityQueue. The priority value is computed by the heuristic scoring function — lower integers mean higher priority (Python's heapq is a min-heap). The scoring function assigns priorities based on event_type: PRIVILEGE_ESCALATION and EXFILTRATION_HINT receive P0 (priority 0), LATERAL_MOVEMENT_HINT and AUTHENTICATION_FAILURE_BURST receive P0 as well. PROCESS_CREATION with a web server parent receives P1 (priority 1). NETWORK_CONNECTION to external IPs on unusual ports receives P1. All other events that pass a basic anomaly threshold receive P2 (priority 2). Events that pass no anomaly threshold at all are not queued — they are stored in SQLite only and discarded from the real-time pipeline. These benign events are still available for historical queries via the Deep Archive Retrieval skill.
+What to watch out for: queue backpressure. If the embedding service is overwhelmed and the queue depth grows beyond a configured threshold (50 entries by default), the ingestion daemon must switch to a drop-oldest strategy for P2 entries only — P0 and P1 entries are never dropped. Implement the queue depth monitor as a background asyncio task that runs every 5 seconds and emits a metric to the monitoring endpoint.
+
+
+
+
+2.1 HEARTBEAT.md Configuration
+The HEARTBEAT.md file is OpenClaw's persistent daemon configuration. It defines the event loop that runs continuously in the background. For AEGIS, the heartbeat performs three actions on each tick: it polls the asyncio.PriorityQueue endpoint (exposed as a FastAPI GET endpoint by the Python ingestion service) for the next available entry, it checks the circuit breaker state for all downstream FastAPI dependencies, and it emits a health-check metric to the monitoring endpoint.
+The poll interval must be configurable. Start at 500ms — this gives the system 2 polling cycles per second, which is sufficient for most SOC environments. Under high load, the queue will buffer entries and deliver them in order regardless of poll interval. What to watch out for: the heartbeat poll must be non-blocking. If the FastAPI queue endpoint is slow (due to the Python service being under load), OpenClaw's entire event loop must not stall waiting for a response. Implement the poll with a timeout of 200ms — if no response arrives, the heartbeat skips this tick and tries again on the next.
+
+2.2 SKILL.md Contract Implementation
+Each skill is an OpenClaw SKILL.md file that defines a self-contained unit of work. The contracts defined in the project documentation are the binding interface — the implementation must match them exactly.
+
+Triage SKILL.md Implementation Logic
+The Triage skill receives a NormalizedLogEntry from Cognitive RAM (placed there by the HEARTBEAT.md after dequeuing). It does not invoke any external service. All logic is pure synchronous computation within the OpenClaw Node.js runtime.
+The skill evaluates a decision tree of flag conditions against the entry's fields. Each flag condition contributes to a cumulative severity score. The flag conditions are: process_name is in the known-dangerous process list (mimikatz, procdump, psexec, wce, fgdump, gsecdump, lsass, ntdsutil) → +40 points; parent_process_name is a web server and process_name is cmd.exe or powershell.exe → +35 points; dest_port is in the known C2 port list (4444, 5555, 1337, 8888, 9001) → +30 points; event_type is PRIVILEGE_ESCALATION or EXFILTRATION_HINT → +50 points; source_ip or dest_ip appears in the recent Cognitive RAM context (meaning this IP has been seen in the last N events) → +20 points for historical correlation.
+The skill outputs a severity classification: score 0–20 is BENIGN (do not escalate), 21–40 is P2, 41–60 is P1, 61+ is P0. The correlation_required field is true for P0 and P1, false for P2 and BENIGN. On P0, the skill immediately triggers an initial alert via OpenClaw's messaging adapter — before correlation completes — so the analyst is aware something critical is occurring even while the full investigation is underway.
+What to watch out for: the known-dangerous process list and known-C2 port list must be stored in an OpenClaw-accessible configuration file, not hardcoded in the skill. This allows the SOC team to update threat intelligence without redeploying the system.
+
+Cognitive RAM Usage Pattern
+OpenClaw's Cognitive RAM is a managed, disk-backed key-value store that persists context across skill invocations. For AEGIS, it serves two distinct purposes.
+First, it is the inter-skill communication channel. The HEARTBEAT.md places the NormalizedLogEntry into a Cognitive RAM key structured as context:triage:{log_uuid}. The Triage skill reads from this key, processes it, and writes its output to context:correlation:{log_uuid}. The Correlation skill reads from context:correlation:{log_uuid}, processes it, and writes to context:timeline:{log_uuid}. The Timeline skill reads from context:timeline:{log_uuid}. After the report is generated, all three context keys for that log_uuid are deleted to free RAM.
+Second, it maintains a rolling IP activity window. Each time the Triage skill processes a log entry with a source_ip or dest_ip, it increments a counter at key activity:ip:{ip_address}:{hour_bucket} in Cognitive RAM. These counters expire after 4 hours. The Triage skill reads these counters to determine if an IP has been recently active — informing the historical correlation score.
+What to watch out for: Cognitive RAM key naming collisions. Two concurrent log entries from the same IP at the same second could write to the same key. Use log_uuid in all per-entry keys to guarantee uniqueness. For the IP activity counters, atomic increment operations prevent race conditions.
+
+2.3 OpenClaw RBAC & Credential Vault
+Each SKILL.md must declare its required permissions in its metadata block. The Triage skill declares read access to Cognitive RAM context namespace only. The Correlation skill additionally declares read access to the ChromaDB query endpoint. The Timeline skill additionally declares read access to the Ollama inference endpoint.
+No skill should have write access to SQLite (only the Python ingestion daemon does). No skill should have network access outside the Docker internal network. The OpenClaw credential vault stores the FastAPI service URL and any authentication tokens — skills reference vault keys by name rather than embedding credentials directly in the SKILL.md file. This means credential rotation requires only a vault update, not a skill redeployment.
+
+2.4 Inter-Agent Handoff Protocol
+The handoff from one agent to the next is explicit and versioned. When the Triage skill writes its output to context:correlation:{log_uuid}, it also writes a handoff manifest to context:manifest:{log_uuid} containing: the originating log_uuid, the skill name that wrote the context, the schema version of the output, and a timestamp. The receiving skill (Correlation) reads the manifest first, validates that the schema version matches what it expects, and only then reads the main context blob.
+If the schema version does not match, the receiving skill emits an error to the dead-letter queue and does not proceed. This versioning mechanism prevents silent data corruption when skills are updated independently — a skill mismatch produces an explicit, diagnosable error rather than garbled output.
+
+
+
+
+3.1 FastAPI Embedding Service
+The embedding service is a Python FastAPI application running in its own Docker container with CUDA runtime access. It exposes two endpoints: POST /embed (accepts a synthetic_intent string and returns a 384-dimensional float array) and POST /embed-batch (accepts a list of synthetic_intent strings and returns a list of float arrays).
+The BGE-m3 model is loaded into GPU memory when the container starts, not on the first request. This means the first embedding request after startup is as fast as subsequent requests. Loading takes approximately 15–30 seconds on an RTX 3060 — this is acceptable during system startup but would be catastrophic if it occurred on the first alert of a demo. The health-check endpoint at GET /health returns 'ready' only after the model is loaded and a test embedding has been generated successfully.
+Dynamic batching is the key performance mechanism. Rather than processing embedding requests one at a time, the service collects incoming requests over a configurable window (default 50ms) and processes them together as a batch GPU call. BGE-m3 on CUDA processes a batch of 16 texts in approximately the same time as processing 1 text — batching multiplies effective throughput by up to 16x. The batch window of 50ms introduces a small additional latency on each request but dramatically increases sustainable throughput under load.
+What to watch out for: the /embed endpoint must validate that the input text is not empty and does not exceed the model's maximum token length (512 tokens for BGE-m3). Text longer than 512 tokens is truncated at the sentence boundary closest to the limit — not mid-word. A mid-word truncation produces a slightly corrupted embedding; a sentence-boundary truncation loses some information but keeps the embedding semantically coherent.
+
+3.2 ChromaDB Collection Design
+ChromaDB organizes embeddings into collections. AEGIS uses two collections: logs_active (the hot index, containing embeddings from the last 72 hours) and logs_archive (the cold index, containing embeddings older than 72 hours).
+Each document in ChromaDB consists of three components: the document text (the synthetic_intent string — stored so it can be retrieved and displayed in the forensic report), the embedding vector (the 384-dimensional float array from BGE-m3), and metadata (a dictionary containing log_uuid, event_timestamp as a Unix timestamp integer, event_type, source_ip, dest_ip, hostname, and severity). The metadata fields enable filtered queries — the temporal bounding query described below uses the event_timestamp metadata field.
+Collection initialization must verify that the HNSW index parameters are correctly set. The ef_construction parameter (which controls index build quality) should be set to 200 for the active collection. The M parameter (connections per node in the HNSW graph) should be set to 48. These values produce an index that balances search speed and recall — higher values give better recall but slower build and query times. For collections up to 1 million entries, these settings provide O(log N) query performance with recall above 95%.
+
+3.3 Correlation SKILL.md Implementation Logic
+The Correlation skill reads the embedding request from Cognitive RAM, calls the FastAPI /embed endpoint with the log's synthetic_intent string, receives the 384-dim vector, and then executes the ChromaDB query.
+Temporal Bounding
+The ChromaDB query includes a metadata filter: event_timestamp must be between (target_event_timestamp - 7200) and (target_event_timestamp + 7200), where 7200 seconds equals ±2 hours. This filter is applied before the HNSW nearest-neighbor search, not after — ChromaDB evaluates metadata filters as pre-filters, discarding non-qualifying documents before the vector comparison. This prevents the correlation engine from linking a reconnaissance scan from Monday to a data exfiltration from Wednesday simply because they happened to involve the same port numbers.
+The time window of ±2 hours is configurable per event_type. For fast-moving attack chains (ransomware propagation, exploit chains), a window of ±30 minutes may be more appropriate. For slow, low-and-slow APT activity, a window of ±24 hours may be needed. These per-type overrides should be stored in the same YAML config as the intent templates.
+Cold Start Handling
+On a fresh deployment with an empty ChromaDB, the first query will return zero results. The Correlation skill detects this via the cold_start flag (cluster_size = 0) and returns a minimal response to the Timeline skill. The Timeline skill has a specific system prompt section for cold-start events: it generates a narrative based solely on the triggering log entry, clearly labels the report as 'Initial Detection — No Historical Context Available,' and includes a note that confidence is low due to insufficient baseline data. After 24–48 hours of normal operation, the vector store accumulates enough data that cold-start events become rare.
+Cosine Similarity Thresholding
+Not all k=20 nearest neighbors are semantically relevant. ChromaDB returns a cosine distance (not similarity — 0 means identical, 1 means orthogonal). Convert to similarity: similarity = 1 - distance. Apply a minimum similarity threshold of 0.72 — entries below this threshold are discarded even if they are within the top 20 results. The threshold of 0.72 means: 'these events must share at least 72% of their semantic direction in vector space.' Events below this threshold are syntactically similar (e.g., two network connection logs) but not behaviorally linked (e.g., a benign Windows Update connection vs. a C2 beacon). The threshold is configurable and should be tuned upward if false correlations appear during testing.
+
+3.4 Timeline SKILL.md & Qwen 2.5 Integration
+The Timeline skill is the most complex component. It receives the correlated cluster from Cognitive RAM, constructs a Qwen 2.5 prompt, invokes Ollama, validates the response with Pydantic, and produces the final forensic report.
+Prompt Engineering for Forensic Narrative
+The Qwen 2.5 prompt is structured as a system message plus a user message. The system message establishes the role and output constraints. It must explicitly instruct the model to: output only valid JSON matching the specified schema (no preamble, no markdown, no explanation outside the JSON), never fabricate events that are not present in the provided log cluster, express uncertainty explicitly (use phrases like 'this behavior is consistent with' rather than 'this proves'), and base MITRE ATT&CK ID assignments only on observed behaviors, not on assumptions about attacker intent.
+The user message contains: the triggering log's synthetic_intent sentence, the correlated cluster (each entry presented as its synthetic_intent sentence with its cosine similarity score and event_timestamp), and the explicit JSON output schema with field descriptions.
+The JSON output schema passed to Qwen 2.5 must exactly match the Pydantic model used for validation. Any field present in the Pydantic model but absent from the prompt schema will produce inconsistent outputs. Any field in the prompt schema but absent from the Pydantic model will be silently discarded — which may cause important data to be lost. The schemas must be kept in sync manually and verified in CI.
+Ollama JSON Mode
+Ollama supports a format parameter in the inference request. Setting format to 'json' instructs the model to constrain its output to valid JSON syntax. This does not guarantee schema compliance — it only guarantees valid JSON. Pydantic validation is still required. However, JSON mode dramatically reduces the frequency of schema violations by preventing the model from outputting markdown fences, explanatory text, or partial objects.
+Temperature Strategy
+For the primary inference attempt, use temperature=0.1. Low temperature produces more deterministic, factual output — appropriate for forensic reporting. The risk of temperature=0 (fully deterministic) is that it can cause the model to get stuck in repetitive patterns on difficult inputs. Temperature=0.1 provides a small amount of variability that helps escape these traps while remaining substantially deterministic.
+For retry attempts (on Pydantic validation failure), reduce temperature further to 0.05. The intuition is that if the first attempt produced invalid output, a more constrained (lower temperature) retry is more likely to produce a clean, schema-compliant JSON object. After 3 failed attempts at any temperature, abandon automated synthesis and escalate to the analyst with the raw cluster.
+MITRE ATT&CK Mapping
+The MITRE ATT&CK mapping is not a separate post-processing step — it is embedded in the Timeline prompt. The system message includes a reference table of the most common ATT&CK tactics and techniques relevant to endpoint and network logs: T1059 (Command and Scripting Interpreter), T1021 (Remote Services), T1055 (Process Injection), T1071 (Application Layer Protocol), T1486 (Data Encrypted for Impact), T1003 (OS Credential Dumping), T1105 (Ingress Tool Transfer), T1543 (Create or Modify System Process), T1505 (Server Software Component), and T1190 (Exploit Public-Facing Application). The model is instructed to assign technique IDs from this reference table based only on observed behaviors in the log cluster. It must not assign IDs for techniques not evidenced in the data.
+Additionally, the ingestion layer's mitre_technique_hint field (populated during template translation) is included in each log entry presented to the model. This gives the model a starting point — it can confirm or reject the hint based on the surrounding context.
+
+3.5 Circuit Breaker Implementation
+The pybreaker library wraps all OpenClaw-to-FastAPI calls. Configure one CircuitBreaker instance per downstream endpoint: one for the /embed endpoint and one for the Ollama inference endpoint. Each circuit breaker has three states: CLOSED (normal operation, requests pass through), OPEN (failure threshold exceeded, requests fail immediately without attempting the call), and HALF-OPEN (recovery testing, one request is allowed through to check if the service has recovered).
+Parameters: failure_threshold=3 (three consecutive failures open the circuit), recovery_timeout=60 (60 seconds in OPEN state before transitioning to HALF-OPEN), expected_exception types include requests.Timeout and requests.ConnectionError but not requests.HTTPError with status 400 (a 400 error means the service is up but the request was malformed — this is a client-side bug, not a service failure).
+When a circuit is OPEN, the OpenClaw skill that called the failing endpoint must: write the pending work item to the dead-letter queue (a SQLite table with columns for work_type, payload, failure_reason, and failed_at timestamp), emit a Telegram/Discord notification that the AEGIS analysis pipeline is degraded with the name of the failing service, and return a graceful error response to the orchestrator rather than crashing.
+
+
+
+
+4.1 Forensic Report Formatting for Messaging
+The raw JSON output from the Timeline SKILL.md must be transformed into a human-readable message before delivery via OpenClaw's Protocol Adapters. The formatting function is implemented as a utility within the Timeline skill — it takes the Pydantic-validated report object and produces a plain-text or Markdown string appropriate for the target messaging platform.
+The message structure is: a severity header (P0 CRITICAL ALERT / P1 HIGH ALERT / P2 MEDIUM ALERT), the narrative paragraph, a timeline section listing events in chronological order with timestamps, an entities section listing all identified IPs / processes / users involved, a MITRE ATT&CK section listing tactic names and technique IDs, a confidence score displayed as a percentage, and a footer with the report_id for cross-referencing with the Cytoscape.js graph.
+Telegram supports Markdown formatting (bold, italic, code blocks). Use code block formatting for IP addresses, process names, and file paths — this makes them visually distinct in the message and easier to copy for manual investigation. Discord supports similar Markdown. WhatsApp supports only plain text — the formatter must have a platform-specific branch that strips Markdown syntax for WhatsApp delivery.
+What to watch out for: Telegram has a 4096-character message length limit. Long forensic narratives for complex multi-stage attacks may exceed this limit. Implement a message chunker that splits the report at logical section boundaries (never mid-sentence) and sends each chunk as a sequential message in the same chat. Include a part indicator (1/3, 2/3, 3/3) in the header of each chunk.
+
+4.2 Knowledge Graph Construction
+The Graph Construction Agent is a Python service that maintains the real-time knowledge graph. It subscribes to a WebSocket channel that the Timeline SKILL.md publishes to after each successful report. On receiving a new report, it updates the in-memory graph data structure and pushes the updated graph to all connected Cytoscape.js browser clients.
+The graph data model: nodes represent entities (IPs, hostnames, processes, user accounts, file paths). Each node has a type attribute (ip, hostname, process, user, file), a label (the entity value), a threat_score (updated with each new report mentioning this entity), and a first_seen and last_seen timestamp. Edges represent observed interactions. Each edge has a type attribute (network_connection, process_spawn, file_write, authentication), a timestamp, a cosine_similarity_score from the correlation that identified this interaction, and a mitre_technique_id if applicable.
+Node coloring strategy: nodes with threat_score below 30 are blue (low risk), 30–60 are amber (medium risk), above 60 are red (high risk). This gives the analyst immediate visual triage — red nodes are the focus of investigation.
+Cytoscape.js Layout Selection
+Use the CoSE-Bilkent layout for the knowledge graph. This force-directed layout is well-suited to security investigation graphs because it naturally clusters related nodes (e.g., an IP, the process connecting to it, and the user running that process will cluster together). The alternative Cola layout is more aesthetically regular but produces less meaningful spatial clusters for security data. The BFS layout is appropriate for the timeline view (a directed acyclic graph showing event sequence) — implement this as a secondary view mode toggled by the analyst.
+WebSocket Push Protocol
+The WebSocket server maintains a list of connected browser clients. When a new report arrives, it broadcasts an update message containing only the delta — new nodes and new edges, not the entire graph. This prevents the browser from re-rendering the entire graph on every update, which becomes prohibitively expensive as the graph grows during a long investigation session. The browser client maintains its own copy of the full graph and applies deltas incrementally.
+
+4.3 Dead-Letter Queue Management
+The dead-letter queue is a SQLite table (dead_letter_queue) in the same database as the raw log store. It has columns for: dlq_uuid (UUID4), work_type (EMBEDDING / CORRELATION / TIMELINE_SYNTHESIS), payload (JSON blob of the work item that failed), failure_reason (string), failed_at (ISO8601 timestamp), retry_count (integer), and resolved (boolean).
+A background task (running as an asyncio coroutine in the Python ingestion service) checks the dead-letter queue every 5 minutes. For entries where retry_count is below 3 and failed_at is more than 5 minutes ago (giving the failed service time to recover), the task re-submits the work item to the priority queue at P1 priority. After 3 total retry attempts, the entry is marked as resolved=false and an analyst notification is sent asking for manual review. This notification includes the log_uuid of the original log entry so the analyst can retrieve it from SQLite directly.
+
+
+
+
+5.1 Unit Testing: Ingestion Normalization Layer
+Unit tests for the ingestion layer are the most important tests in the project. They verify that the normalization and synthetic intent translation produce correct outputs for every supported log type. These tests must be implemented before any AI component is integrated — they serve as the correctness baseline.
+For each supported log type, create a fixture file containing 5–10 representative raw log entries, including at least one malformed entry and one entry with null optional fields. The test asserts: the canonical JSON schema fields are correctly populated, the synthetic_intent string matches the expected template output exactly (using a known input with known field values), the SHA-256 hash of the raw_payload matches a pre-computed reference value, and the priority score assigned by the heuristic function matches the expected classification.
+Test the entropy computation function in isolation against known-high-entropy (DGA-like) and known-low-entropy (legitimate) domain strings. Test the template fallback path with a log entry whose event_type is UNKNOWN.
+
+5.2 Integration Testing: OpenClaw Handoff Verification
+Integration tests verify that the full agent chain — from HEARTBEAT.md dequeue through Triage, Correlation, and Timeline — produces a valid forensic report for a known injected anomaly. These tests run against a live (but isolated) Docker Compose environment with a pre-seeded ChromaDB containing 100–200 synthetic log embeddings representing normal baseline activity.
+The test procedure: inject a synthetic attack sequence (5–7 log entries representing reconnaissance, credential dumping, and lateral movement) into the monitored log directory. Wait for the Timeline report to arrive in the Telegram test channel (or verify it in the dead-letter queue if the messaging adapter is disabled for testing). Assert: the report's narrative mentions the injected attack steps, the MITRE ATT&CK IDs are plausible for the injected behavior, the confidence score is above 0.6, the entities list includes the attacker IP and the victim hostname, and the report_id matches a new entry in the knowledge graph WebSocket stream.
+
+5.3 Stress Testing: Concurrency & Backpressure
+The stress test injects a continuous stream of 500 log entries per second for 60 seconds — 30,000 total entries. Of these, approximately 5% (1,500 entries) contain anomaly indicators. The test validates: the priority queue depth never exceeds 200 entries (P2 dropping activates before 50 but drops gracefully), no P0 or P1 entries are dropped, the circuit breaker does not activate under normal load, all 1,500 anomalous entries eventually produce forensic reports (some may be delayed by dead-letter queue retries), and the Qwen 2.5 Ollama instance is never hit with more than one concurrent inference request.
+The concurrent anomaly test specifically validates the race condition mitigation. Inject two P0 anomalies within 10ms of each other. Assert: both anomalies produce separate, complete forensic reports, the reports do not contain any interleaved data from each other, and the second anomaly's report has a higher latency than the first (demonstrating queue serialization rather than parallel execution).
+
+5.4 Ablation Testing: Semantic Embedding vs. Keyword Matching
+The ablation test quantifies the value of the synthetic intent translation and semantic embedding over a keyword-matching baseline. This data is essential for the demo pitch — it provides concrete evidence that the system's core innovation delivers measurable improvement.
+Baseline system: replace the BGE-m3 embedding and ChromaDB query with a keyword-matching function (BM25 or simple TF-IDF over the raw log fields). Test corpus: 50 known attack scenarios with ground-truth correlated event clusters (manually labeled). Metrics: Precision@10 (what fraction of the top 10 retrieved events are truly related to the attack), Recall@10 (what fraction of truly related events appear in the top 10), and Mean Average Precision.
+Expected result: the semantic embedding system should outperform keyword matching significantly on obfuscated attacks (renamed processes, non-standard ports, encoded command lines) because the synthetic intent translation captures behavioral semantics that keyword matching misses. For non-obfuscated attacks, performance should be comparable. If the semantic system underperforms on non-obfuscated attacks, the intent templates may need refinement.
+
+
+
+
+6.1 Demo Environment Setup
+The demo environment must be a clean, isolated Docker Compose stack with a pre-seeded ChromaDB containing 48 hours of synthetic baseline log embeddings. This baseline is critical — without it, the system is in cold-start mode and cannot demonstrate semantic correlation. Pre-generate the baseline by running a log simulation script for 10 minutes against the live system and archiving the resulting ChromaDB volume. Restore this volume at the start of every demo to guarantee a consistent starting state.
+The demo presentation setup: two screens or two browser tabs. Left screen: a terminal showing the live log injection stream (the 'attacker view'). Right screen: split between the Cytoscape.js knowledge graph (updating in real time) and the Telegram/Discord channel (receiving alerts). This visual layout makes the cause-and-effect relationship immediately obvious to judges — they can see log entries appearing on the left and the graph updating + alerts arriving on the right within 30–60 seconds.
+
+6.2 Attack Scenario 1: Web Shell → Lateral Movement
+This is the primary demo scenario. It demonstrates the full pipeline from initial detection through timeline synthesis and MITRE ATT&CK mapping.
+Step 1 — Web Shell Execution: Inject a Sysmon Event ID 1 log: apache2.exe spawns cmd.exe as user www-data. The intent template generates: 'User www-data executed cmd.exe which was spawned by apache2.exe. Parent process is a web server — possible web shell execution.' Expected: P1 alert within 2 seconds.
+Step 2 — Reconnaissance: Inject a Sysmon Event ID 3 log: cmd.exe makes network connections to 10 internal IPs in rapid succession on port 445 (SMB). Intent template generates: 'cmd.exe on WEBSERVER01 initiated network connections to multiple internal hosts on SMB port — possible network reconnaissance.' Expected: these entries are stored and embedded; when correlated with Step 1, they reinforce the attack narrative.
+Step 3 — Credential Dumping: Inject a Sysmon Event ID 10 log: cmd.exe opens a handle to lsass.exe. Intent template generates: 'cmd.exe on WEBSERVER01 accessed process lsass.exe — possible credential dumping.' Expected: P0 alert, immediate pre-correlation notification to analyst, full correlation triggers.
+Step 4 — Lateral Movement: Inject an authentication success log (Event ID 4624) for a new hostname using the credentials likely dumped in Step 3. Intent template generates: 'Successful authentication for user Administrator on DBSERVER02 from WEBSERVER01.' Expected: full forensic narrative identifies the complete kill chain.
+By Step 4, the knowledge graph should show: a node for the attacker's entry point (apache2.exe on WEBSERVER01), connected to cmd.exe, connected to lsass.exe, with a lateral movement edge to DBSERVER02. The Telegram report should identify T1505.003 (Web Shell), T1059.003 (Windows Command Shell), T1003.001 (LSASS Memory), and T1021.002 (SMB/Windows Admin Shares).
+
+6.3 Attack Scenario 2: DNS Tunneling Exfiltration
+This scenario demonstrates the entropy-based detection in the intent translation layer and validates that the system catches obfuscated exfiltration channels that signature-based SIEMs miss.
+Inject 20 Zeek DNS query logs over 10 seconds, each querying a different subdomain of the same domain. The subdomains are high-entropy strings (simulate DGA or data exfiltration encoding): 'c29tZXNlY3JldGRhdGE.exfil.attacker.com'. The entropy computation flags each as above threshold 3.5.
+The intent template for each: 'WORKSTATION05 (10.1.1.50) queried DNS for c29tZXNlY3JldGRhdGE.exfil.attacker.com. Domain has high entropy — possible DNS tunneling or DGA activity.'
+With 20 semantically similar entries in the queue, the Correlation skill pulls all 20 as a cluster (they are within the time window and above the cosine similarity threshold — 20 variations of 'DNS query to high-entropy subdomain of same domain' will be very close in vector space).
+The Timeline narrative identifies the pattern: sustained high-entropy DNS queries to the same parent domain, consistent with data exfiltration via DNS tunneling. MITRE ATT&CK: T1071.004 (Application Layer Protocol: DNS).
+
+
+
+Implementation Completion Checklist
+Use this checklist to verify implementation completeness before the final submission. Every item must be checked.
+
+Plane 1: Ingestion & Normalization
+
+Plane 2: OpenClaw Orchestration
+
+Plane 3: Semantic Correlation & Reasoning
+
+Plane 4: Output & Knowledge Graph
+
+Security Hardening
+
+
+
+Appendix: Technical Pitfall Reference
+A consolidated reference of the most critical implementation pitfalls identified throughout this methodology. Review before each phase begins.
+
+
+
+— End of Implementation Methodology —
+
+=== TABLE 1 ===
+Plane 1
+Ingestion & Normalization | Plane 2
+OpenClaw Orchestration | Plane 3
+Semantic Correlation | Plane 4
+Output & Persistence
+
+=== TABLE 2 ===
+CRITICAL READ | The Synthetic Intent Translation mechanism described in Section 2.4 is the single most important quality improvement available to this system. It must be implemented in Plane 1 before any AI model is ever invoked. Embedding quality determines retrieval quality — if this step is skipped, every downstream result degrades.
+
+=== TABLE 3 ===
+PHASE 0
+Environment Setup & Repository Structure
+Before writing a single line of application logic
+
+=== TABLE 4 ===
+PHASE 1
+Plane 1: Ingestion & Normalization Daemon
+The foundation everything else depends on
+
+=== TABLE 5 ===
+PHASE 2
+Plane 2: OpenClaw Orchestration
+HEARTBEAT.md, SKILL.md contracts, and Cognitive RAM
+
+=== TABLE 6 ===
+PHASE 3
+Plane 3: Semantic Correlation & Reasoning
+Embedding service, ChromaDB, and LLM synthesis
+
+=== TABLE 7 ===
+PHASE 4
+Plane 4: Output, Knowledge Graph & Persistence
+The analyst-facing layer
+
+=== TABLE 8 ===
+PHASE 5
+Testing Strategy & Validation
+Unit, integration, stress, and ablation testing
+
+=== TABLE 9 ===
+PHASE 6
+Demo Scenario Design & Execution
+Maximizing judge impact in 10 minutes
+
+=== TABLE 10 ===
+[ ] | Watchdog daemon monitors configured log directories with inode-aware file rotation handling
+[ ] | Log type identification registry covers all target log formats (Sysmon, Zeek, firewall)
+[ ] | Canonical JSON schema defined in schemas/ and shared across all planes
+[ ] | Intent template YAML config covers all 6 core event types with enrichment conditions
+[ ] | Entropy computation function tested on known DGA and legitimate domains
+[ ] | Template fallback produces valid synthetic_intent for UNKNOWN event types
+[ ] | Null field substitution ('unknown') tested for all template placeholders
+[ ] | SHA-256 hashing computed and stored for every log entry
+[ ] | SQLite WAL mode enabled and verified with concurrent read test
+[ ] | Priority queue scoring function produces correct P0/P1/P2/BENIGN classification
+[ ] | Queue backpressure mechanism drops P2 entries and never drops P0/P1
+
+=== TABLE 11 ===
+[ ] | HEARTBEAT.md polls queue with non-blocking 200ms timeout
+[ ] | Triage SKILL.md flag conditions cover all heuristic categories with configurable lists
+[ ] | Cognitive RAM key naming convention uses log_uuid to prevent collisions
+[ ] | IP activity counters in Cognitive RAM expire correctly after 4 hours
+[ ] | SKILL.md metadata declares permissions per RBAC spec
+[ ] | Credential vault stores all FastAPI URLs and tokens; no hardcoded credentials
+[ ] | Inter-agent handoff manifest includes schema version and is validated by receiving skill
+[ ] | Schema version mismatch produces dead-letter entry, not a crash
+
+=== TABLE 12 ===
+[ ] | BGE-m3 loads into GPU memory at container startup; health endpoint returns ready only after test embedding
+[ ] | Dynamic batching (50ms window) implemented and throughput verified under load
+[ ] | Input text validated for empty string and 512-token limit with sentence-boundary truncation
+[ ] | ChromaDB HNSW parameters set (ef_construction=200, M=48) on collection creation
+[ ] | Temporal bounding filter uses event_timestamp metadata field as pre-filter
+[ ] | Cosine similarity threshold 0.72 applied; sub-threshold results discarded
+[ ] | Cold start (cluster_size=0) returns cold_start=true flag; Timeline handles gracefully
+[ ] | Qwen 2.5 invoked with format=json; temperature=0.1 primary, 0.05 on retry
+[ ] | Pydantic model matches Qwen 2.5 output schema exactly; schemas kept in sync
+[ ] | 3-retry fallback triggers dead-letter queue escalation with analyst notification
+[ ] | MITRE ATT&CK reference table included in system prompt; IDs validated against MITRE taxonomy
+[ ] | Circuit breaker configured with failure_threshold=3, recovery_timeout=60
+[ ] | OPEN circuit emits dead-letter entry and analyst degradation alert
+
+=== TABLE 13 ===
+[ ] | Telegram message formatter handles 4096-char limit with logical chunking
+[ ] | WhatsApp formatter strips Markdown; Telegram/Discord use code blocks for IPs and processes
+[ ] | Knowledge graph WebSocket server sends deltas, not full graph, on each update
+[ ] | Node threat_score coloring: blue (<30), amber (30–60), red (>60)
+[ ] | Cytoscape.js CoSE-Bilkent layout active; BFS timeline view available as secondary mode
+[ ] | Dead-letter queue retry task runs every 5 minutes; re-submits at P1 after 5-minute delay
+[ ] | Dead-letter entries with retry_count >= 3 marked resolved=false and trigger analyst manual review alert
+
+=== TABLE 14 ===
+[ ] | Log sanitization strips code blocks and instruction patterns before LLM injection
+[ ] | Docker read-only volume mounts applied to all skill containers
+[ ] | Seccomp profiles block fork/exec, network sockets, and unauthorized fs writes in skill containers
+[ ] | SHA-256 hash verification on every SQLite retrieval
+[ ] | OpenClaw RBAC: Triage has no FastAPI access; Correlation has /embed only; Timeline has /ollama only
+
+=== TABLE 15 ===
+Pitfall | Where It Strikes | Prevention
+Embedding raw JSON instead of synthetic_intent string | Plane 3 (first pass through embedding service) | Always embed synthetic_intent field, never raw_payload or the full JSON object
+Parallel Qwen 2.5 inference requests exhausting VRAM | Under concurrent attack scenarios | Single-worker asyncio.PriorityQueue enforces serial inference; never parallelize LLM calls
+ChromaDB temporal filter applied as post-filter (full index scan) | Correlation SKILL.md first implementation | Use ChromaDB where clause with event_timestamp as pre-filter, not post-filter
+Pydantic schema and Qwen 2.5 prompt schema drift | Any Timeline SKILL.md prompt update | Generate the JSON schema in the prompt from the Pydantic model programmatically using model.schema()
+Telegram 4096-char message limit exceeded mid-sentence | Complex multi-stage attack narratives | Chunk at section boundaries before sending; include part indicator in each chunk header
+Log file position cursor not persisted across daemon restarts | Any container restart during the demo | Persist cursor to disk (JSON file per monitored path); load on startup before beginning tailing

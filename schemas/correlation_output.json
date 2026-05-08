@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CorrelationOutput",
+  "description": "Output schema for the Correlation SKILL.md",
+  "type": "object",
+  "required": ["correlated_uuids", "cosine_scores", "cluster_size", "temporal_span_minutes", "cold_start"],
+  "properties": {
+    "correlated_uuids": { "type": "array", "items": { "type": "string", "format": "uuid" } },
+    "cosine_scores": { "type": "array", "items": { "type": "number" } },
+    "cluster_size": { "type": "integer" },
+    "temporal_span_minutes": { "type": "number" },
+    "cold_start": { "type": "boolean" }
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NormalizedLogEntry",
+  "description": "Canonical JSON schema for all normalized log entries. This is the single source of truth shared across all four planes.",
+  "type": "object",
+  "required": [
+    "log_uuid",
+    "ingestion_timestamp",
+    "event_timestamp",
+    "event_type",
+    "hostname",
+    "sha256_hash",
+    "raw_payload",
+    "synthetic_intent"
+  ],
+  "properties": {
+    "log_uuid": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID4 generated at ingestion time"
+    },
+    "ingestion_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO8601 UTC timestamp of when the log was ingested"
+    },
+    "event_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Parsed from log source, or ingestion_timestamp if absent"
+    },
+    "source_ip": {
+      "type": ["string", "null"],
+      "description": "Source IP address"
+    },
+    "dest_ip": {
+      "type": ["string", "null"],
+      "description": "Destination IP address"
+    },
+    "source_port": {
+      "type": ["integer", "null"],
+      "description": "Source port number"
+    },
+    "dest_port": {
+      "type": ["integer", "null"],
+      "description": "Destination port number"
+    },
+    "process_name": {
+      "type": ["string", "null"],
+      "description": "Name of the process involved"
+    },
+    "parent_process_name": {
+      "type": ["string", "null"],
+      "description": "Name of the parent process"
+    },
+    "user_account": {
+      "type": ["string", "null"],
+      "description": "User account associated with the event"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "PROCESS_CREATION",
+        "NETWORK_CONNECTION",
+        "FILE_WRITE",
+        "FILE_DELETE",
+        "REGISTRY_WRITE",
+        "DNS_QUERY",
+        "HTTP_REQUEST",
+        "AUTHENTICATION_SUCCESS",
+        "AUTHENTICATION_FAILURE",
+        "AUTHENTICATION_FAILURE_BURST",
+        "PRIVILEGE_ESCALATION",
+        "SERVICE_INSTALL",
+        "SCHEDULED_TASK",
+        "LATERAL_MOVEMENT_HINT",
+        "EXFILTRATION_HINT",
+        "UNKNOWN"
+      ],
+      "description": "Flat taxonomy string for event classification"
+    },
+    "event_code": {
+      "type": ["string", "null"],
+      "description": "Original numeric code from the source system"
+    },
+    "hostname": {
+      "type": "string",
+      "description": "Hostname where the event occurred"
+    },
+    "sha256_hash": {
+      "type": "string",
+      "description": "SHA-256 hash of the raw_payload for chain-of-custody"
+    },
+    "raw_payload": {
+      "type": "string",
+      "description": "Original log line stored verbatim"
+    },
+    "synthetic_intent": {
+      "type": "string",
+      "description": "Human-readable sentence for BGE-m3 embedding"
+    },
+    "file_path": {
+      "type": ["string", "null"],
+      "description": "File path involved in the event (optional)"
+    },
+    "registry_key": {
+      "type": ["string", "null"],
+      "description": "Registry key involved (optional, Windows)"
+    },
+    "command_line_args": {
+      "type": ["string", "null"],
+      "description": "Command line arguments (optional)"
+    },
+    "dns_query": {
+      "type": ["string", "null"],
+      "description": "DNS domain queried (optional)"
+    },
+    "http_url": {
+      "type": ["string", "null"],
+      "description": "HTTP URL accessed (optional)"
+    },
+    "http_method": {
+      "type": ["string", "null"],
+      "description": "HTTP method used (optional)"
+    },
+    "bytes_sent": {
+      "type": ["integer", "null"],
+      "description": "Bytes sent (optional)"
+    },
+    "bytes_received": {
+      "type": ["integer", "null"],
+      "description": "Bytes received (optional)"
+    },
+    "mitre_technique_hint": {
+      "type": ["string", "null"],
+      "description": "MITRE ATT&CK technique ID hint from intent translation"
+    }
+  }
+}

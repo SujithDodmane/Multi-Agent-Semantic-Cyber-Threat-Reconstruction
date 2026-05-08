@@ -1,0 +1,54 @@
+[
+  {
+    "_comment": "Malicious: C2 callback on port 4444",
+    "raw_log": "{\"EventID\":3,\"UtcTime\":\"2026-05-07 11:00:00.000\",\"ProcessId\":4892,\"Image\":\"C:\\\\Windows\\\\Temp\\\\beacon.exe\",\"User\":\"CORP\\\\admin\",\"SourceIp\":\"10.0.0.50\",\"SourcePort\":54321,\"DestinationIp\":\"203.0.113.99\",\"DestinationPort\":4444,\"Protocol\":\"tcp\"}",
+    "expected": {
+      "event_type": "NETWORK_CONNECTION",
+      "process_name": "beacon.exe",
+      "source_ip": "10.0.0.50",
+      "dest_ip": "203.0.113.99",
+      "dest_port": 4444,
+      "severity_min": "P1",
+      "triage_flags_contain": "c2_port"
+    }
+  },
+  {
+    "_comment": "Suspicious: internal lateral movement on SMB 445",
+    "raw_log": "{\"EventID\":3,\"UtcTime\":\"2026-05-07 11:01:00.000\",\"ProcessId\":5100,\"Image\":\"C:\\\\Windows\\\\System32\\\\cmd.exe\",\"User\":\"CORP\\\\admin\",\"SourceIp\":\"10.0.0.50\",\"SourcePort\":55000,\"DestinationIp\":\"10.0.0.100\",\"DestinationPort\":445,\"Protocol\":\"tcp\"}",
+    "expected": {
+      "event_type": "NETWORK_CONNECTION",
+      "process_name": "cmd.exe",
+      "source_ip": "10.0.0.50",
+      "dest_ip": "10.0.0.100",
+      "dest_port": 445
+    }
+  },
+  {
+    "_comment": "Benign: HTTPS to CDN",
+    "raw_log": "{\"EventID\":3,\"UtcTime\":\"2026-05-07 11:05:00.000\",\"ProcessId\":6200,\"Image\":\"C:\\\\Program Files\\\\Chrome\\\\chrome.exe\",\"User\":\"CORP\\\\jsmith\",\"SourceIp\":\"10.0.0.20\",\"SourcePort\":56000,\"DestinationIp\":\"142.250.80.100\",\"DestinationPort\":443,\"Protocol\":\"tcp\"}",
+    "expected": {
+      "event_type": "NETWORK_CONNECTION",
+      "process_name": "chrome.exe",
+      "dest_port": 443,
+      "severity_min": "BENIGN"
+    }
+  },
+  {
+    "_comment": "Malformed: missing destination",
+    "raw_log": "{\"EventID\":3,\"UtcTime\":\"2026-05-07 11:10:00.000\",\"ProcessId\":7000,\"Image\":\"unknown.exe\",\"SourceIp\":\"10.0.0.30\"}",
+    "expected": {
+      "event_type": "NETWORK_CONNECTION",
+      "is_malformed": true
+    }
+  },
+  {
+    "_comment": "Null dest_ip — internal broadcast",
+    "raw_log": "{\"EventID\":3,\"UtcTime\":\"2026-05-07 11:15:00.000\",\"ProcessId\":8000,\"Image\":\"C:\\\\Windows\\\\System32\\\\svchost.exe\",\"SourceIp\":\"10.0.0.10\",\"SourcePort\":137,\"DestinationPort\":137,\"Protocol\":\"udp\"}",
+    "expected": {
+      "event_type": "NETWORK_CONNECTION",
+      "dest_ip": null,
+      "dest_port": 137,
+      "severity_min": "BENIGN"
+    }
+  }
+]

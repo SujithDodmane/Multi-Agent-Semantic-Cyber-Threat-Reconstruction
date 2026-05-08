@@ -1,0 +1,46 @@
+[
+  {
+    "_comment": "Malicious: write to System32",
+    "raw_log": "{\"EventID\":11,\"UtcTime\":\"2026-05-07T15:00:00Z\",\"ProcessId\":4892,\"Image\":\"C:\\\\Windows\\\\Temp\\\\payload.exe\",\"TargetFilename\":\"C:\\\\Windows\\\\System32\\\\evil.dll\",\"User\":\"SYSTEM\"}",
+    "expected": {
+      "event_type": "FILE_WRITE",
+      "process_name": "payload.exe",
+      "file_path": "C:\\Windows\\System32\\evil.dll"
+    }
+  },
+  {
+    "_comment": "Malicious: /etc/passwd access (Linux)",
+    "raw_log": "{\"timestamp\":\"2026-05-07T15:05:00Z\",\"process\":\"cat\",\"file\":\"/etc/passwd\",\"user\":\"www-data\",\"hostname\":\"WEBSERVER01\"}",
+    "expected": {
+      "event_type": "FILE_WRITE",
+      "process_name": "cat",
+      "file_path": "/etc/passwd"
+    }
+  },
+  {
+    "_comment": "Benign: temp file creation",
+    "raw_log": "{\"EventID\":11,\"UtcTime\":\"2026-05-07T15:10:00Z\",\"ProcessId\":6200,\"Image\":\"C:\\\\Windows\\\\System32\\\\notepad.exe\",\"TargetFilename\":\"C:\\\\Users\\\\jsmith\\\\AppData\\\\Local\\\\Temp\\\\report.tmp\",\"User\":\"CORP\\\\jsmith\"}",
+    "expected": {
+      "event_type": "FILE_WRITE",
+      "process_name": "notepad.exe",
+      "severity_min": "BENIGN"
+    }
+  },
+  {
+    "_comment": "Malicious: web shell drop in web root",
+    "raw_log": "{\"EventID\":11,\"UtcTime\":\"2026-05-07T15:15:00Z\",\"ProcessId\":1200,\"Image\":\"C:\\\\Program Files\\\\Apache\\\\apache2.exe\",\"TargetFilename\":\"C:\\\\inetpub\\\\wwwroot\\\\shell.aspx\",\"User\":\"IIS APPPOOL\\\\DefaultAppPool\"}",
+    "expected": {
+      "event_type": "FILE_WRITE",
+      "process_name": "apache2.exe",
+      "file_path": "C:\\inetpub\\wwwroot\\shell.aspx"
+    }
+  },
+  {
+    "_comment": "Malformed: missing process and file",
+    "raw_log": "{\"EventID\":11,\"UtcTime\":\"2026-05-07T15:20:00Z\"}",
+    "expected": {
+      "event_type": "FILE_WRITE",
+      "is_malformed": true
+    }
+  }
+]

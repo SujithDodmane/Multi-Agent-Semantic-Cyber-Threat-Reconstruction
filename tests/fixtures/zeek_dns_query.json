@@ -1,0 +1,52 @@
+[
+  {
+    "_comment": "Malicious: high-entropy DGA domain",
+    "raw_log": "{\"ts\":1746612000.0,\"uid\":\"CYxbKz3\",\"id.orig_h\":\"10.1.1.50\",\"id.orig_p\":53421,\"id.resp_h\":\"8.8.8.8\",\"id.resp_p\":53,\"query\":\"xk9f2m7q3r.evil-c2.com\",\"qtype\":\"A\",\"rcode\":0}",
+    "expected": {
+      "event_type": "DNS_QUERY",
+      "source_ip": "10.1.1.50",
+      "dns_query": "xk9f2m7q3r.evil-c2.com",
+      "high_entropy": true,
+      "severity_min": "P2"
+    }
+  },
+  {
+    "_comment": "Benign: legitimate google.com",
+    "raw_log": "{\"ts\":1746612010.0,\"uid\":\"CYxbKz4\",\"id.orig_h\":\"10.1.1.20\",\"id.orig_p\":53500,\"id.resp_h\":\"8.8.8.8\",\"id.resp_p\":53,\"query\":\"www.google.com\",\"qtype\":\"A\",\"rcode\":0}",
+    "expected": {
+      "event_type": "DNS_QUERY",
+      "source_ip": "10.1.1.20",
+      "dns_query": "www.google.com",
+      "high_entropy": false,
+      "severity_min": "BENIGN"
+    }
+  },
+  {
+    "_comment": "Benign: CDN subdomain",
+    "raw_log": "{\"ts\":1746612020.0,\"uid\":\"CYxbKz5\",\"id.orig_h\":\"10.1.1.30\",\"id.orig_p\":53600,\"id.resp_h\":\"1.1.1.1\",\"id.resp_p\":53,\"query\":\"cdn.cloudflare.net\",\"qtype\":\"AAAA\",\"rcode\":0}",
+    "expected": {
+      "event_type": "DNS_QUERY",
+      "dns_query": "cdn.cloudflare.net",
+      "high_entropy": false,
+      "severity_min": "BENIGN"
+    }
+  },
+  {
+    "_comment": "Malicious: base64-encoded exfiltration subdomain",
+    "raw_log": "{\"ts\":1746612030.0,\"uid\":\"CYxbKz6\",\"id.orig_h\":\"10.1.1.50\",\"id.orig_p\":53700,\"id.resp_h\":\"8.8.8.8\",\"id.resp_p\":53,\"query\":\"c29tZXNlY3JldGRhdGE.exfil.attacker.com\",\"qtype\":\"TXT\",\"rcode\":0}",
+    "expected": {
+      "event_type": "DNS_QUERY",
+      "dns_query": "c29tZXNlY3JldGRhdGE.exfil.attacker.com",
+      "high_entropy": true,
+      "severity_min": "P2"
+    }
+  },
+  {
+    "_comment": "Malformed: missing query field",
+    "raw_log": "{\"ts\":1746612040.0,\"uid\":\"CYxbKz7\",\"id.orig_h\":\"10.1.1.40\"}",
+    "expected": {
+      "event_type": "DNS_QUERY",
+      "is_malformed": true
+    }
+  }
+]

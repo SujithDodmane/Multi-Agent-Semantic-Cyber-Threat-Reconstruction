@@ -1,0 +1,56 @@
+# ==============================================================================
+# AEGIS .gitignore
+# ==============================================================================
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+claw/
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# --- Node.js ---
+node_modules/
+npm-debug.log*
+
+# --- Environment ---
+.env
+.env.local
+
+# --- Data (runtime generated) ---
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/chromadb/
+data/cursors/
+
+# --- Logs (monitored directory) ---
+logs/*.log
+logs/*.json
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Extracted text files (temporary) ---
+abstract_report.txt
+abstract_tables.txt
+detailed_methodology.txt
+methodology_tables.txt

@@ -1,0 +1,18 @@
+{
+  "name": "aegis-openclaw",
+  "version": "0.1.0",
+  "description": "AEGIS OpenClaw orchestration layer — Plane 2",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "openclaw": "latest",
+    "js-yaml": "^4.1.0",
+    "dotenv": "^16.4.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

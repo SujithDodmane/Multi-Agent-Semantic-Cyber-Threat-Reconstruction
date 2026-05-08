@@ -1,0 +1,48 @@
+[
+  {
+    "_comment": "Suspicious: failed login burst (5 failures in 10s)",
+    "raw_log": "{\"EventID\":4625,\"TimeCreated\":\"2026-05-07T12:00:00Z\",\"TargetUserName\":\"Administrator\",\"TargetDomainName\":\"CORP\",\"IpAddress\":\"10.0.0.50\",\"LogonType\":10,\"WorkstationName\":\"WEBSERVER01\",\"FailureReason\":\"Unknown user name or bad password\",\"SubjectUserName\":\"-\"}",
+    "expected": {
+      "event_type": "AUTH_FAILURE",
+      "user_account": "Administrator",
+      "source_ip": "10.0.0.50",
+      "hostname": "WEBSERVER01"
+    }
+  },
+  {
+    "_comment": "Post-failure success — potential brute force win",
+    "raw_log": "{\"EventID\":4624,\"TimeCreated\":\"2026-05-07T12:00:15Z\",\"TargetUserName\":\"Administrator\",\"TargetDomainName\":\"CORP\",\"IpAddress\":\"10.0.0.50\",\"LogonType\":10,\"WorkstationName\":\"DBSERVER02\",\"SubjectUserName\":\"WEBSERVER01$\"}",
+    "expected": {
+      "event_type": "AUTH_SUCCESS",
+      "user_account": "Administrator",
+      "source_ip": "10.0.0.50",
+      "hostname": "DBSERVER02"
+    }
+  },
+  {
+    "_comment": "Benign: normal interactive login",
+    "raw_log": "{\"EventID\":4624,\"TimeCreated\":\"2026-05-07T09:00:00Z\",\"TargetUserName\":\"jsmith\",\"TargetDomainName\":\"CORP\",\"IpAddress\":\"10.0.0.20\",\"LogonType\":2,\"WorkstationName\":\"WORKSTATION03\"}",
+    "expected": {
+      "event_type": "AUTH_SUCCESS",
+      "user_account": "jsmith",
+      "severity_min": "BENIGN"
+    }
+  },
+  {
+    "_comment": "Unknown user — possible reconnaissance",
+    "raw_log": "{\"EventID\":4625,\"TimeCreated\":\"2026-05-07T12:05:00Z\",\"TargetUserName\":\"__test_user__\",\"TargetDomainName\":\"CORP\",\"IpAddress\":\"192.168.1.200\",\"LogonType\":3,\"WorkstationName\":\"UNKNOWN\",\"FailureReason\":\"Unknown user name\"}",
+    "expected": {
+      "event_type": "AUTH_FAILURE",
+      "user_account": "__test_user__"
+    }
+  },
+  {
+    "_comment": "Malformed: missing username",
+    "raw_log": "{\"EventID\":4624,\"TimeCreated\":\"2026-05-07T13:00:00Z\",\"IpAddress\":\"10.0.0.5\",\"LogonType\":3}",
+    "expected": {
+      "event_type": "AUTH_SUCCESS",
+      "user_account": "unknown",
+      "is_malformed": true
+    }
+  }
+]

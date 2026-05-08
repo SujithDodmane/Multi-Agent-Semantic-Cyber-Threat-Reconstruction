@@ -1,0 +1,38 @@
+{
+  "defaultAction": "SCMP_ACT_ALLOW",
+  "syscalls": [
+    {
+      "names": [
+        "clone",
+        "fork",
+        "vfork",
+        "execve",
+        "execveat"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "comment": "Block process creation — skills must not spawn arbitrary processes"
+    },
+    {
+      "names": [
+        "socket",
+        "connect",
+        "bind",
+        "listen",
+        "accept",
+        "accept4"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "comment": "Block network socket creation — skills have no legitimate outbound need"
+    },
+    {
+      "names": [
+        "mount",
+        "umount2",
+        "pivot_root",
+        "chroot"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "comment": "Block filesystem mount manipulation"
+    }
+  ]
+}

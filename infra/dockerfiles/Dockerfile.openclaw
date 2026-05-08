@@ -1,0 +1,13 @@
+FROM node:22-slim
+
+WORKDIR /app
+
+COPY openclaw/package.json /app/package.json
+RUN npm install
+
+COPY openclaw/ /app/
+COPY schemas/ /app/schemas/
+
+EXPOSE 3000
+
+CMD ["node", "index.js"]

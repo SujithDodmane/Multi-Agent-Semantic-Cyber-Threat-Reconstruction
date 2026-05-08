@@ -1,0 +1,53 @@
+[project]
+name = "aegis"
+version = "0.1.0"
+description = "Multi-Agent Semantic Threat Evaluation & Reconstruction"
+requires-python = ">=3.10,<3.13"
+readme = "README.md"
+
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "pydantic>=2.10.0",
+    "sqlalchemy>=2.0.0",
+    "watchdog>=6.0.0",
+    "pybreaker>=1.2.0",
+    "python-telegram-bot>=21.0",
+    "aiohttp>=3.10.0",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0.0",
+    "httpx>=0.27.0",
+    "chromadb>=0.5.0",
+    "sentence-transformers>=3.3.0",
+    "flask>=3.1.0",
+    "flask-socketio>=5.4.0",
+]
+
+[project.optional-dependencies]
+gpu = [
+    "torch>=2.5.0",
+    "torchvision",
+    "torchaudio",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+    "black>=24.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "telegram: Tests that make real Telegram API calls (deselect with '-m \"not telegram\"')",
+    "gpu: Tests that require CUDA GPU (deselect with '-m \"not gpu\"')",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]

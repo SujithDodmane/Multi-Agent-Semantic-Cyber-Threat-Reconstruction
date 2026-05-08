@@ -1,0 +1,46 @@
+[
+  {
+    "_comment": "Malicious: SQL injection in URL",
+    "raw_log": "{\"timestamp\":\"2026-05-07T14:00:00Z\",\"source_ip\":\"198.51.100.10\",\"dest_ip\":\"10.0.0.80\",\"dest_port\":80,\"method\":\"GET\",\"url\":\"/products?id=1' OR '1'='1' -- \",\"status_code\":200,\"user_agent\":\"sqlmap/1.7\",\"bytes_sent\":0,\"bytes_received\":15234}",
+    "expected": {
+      "event_type": "HTTP_REQUEST",
+      "source_ip": "198.51.100.10",
+      "http_url": "/products?id=1' OR '1'='1' -- ",
+      "http_method": "GET"
+    }
+  },
+  {
+    "_comment": "Benign: normal GET request",
+    "raw_log": "{\"timestamp\":\"2026-05-07T14:05:00Z\",\"source_ip\":\"10.0.0.20\",\"dest_ip\":\"10.0.0.80\",\"dest_port\":443,\"method\":\"GET\",\"url\":\"/api/v1/status\",\"status_code\":200,\"user_agent\":\"Mozilla/5.0\",\"bytes_sent\":0,\"bytes_received\":256}",
+    "expected": {
+      "event_type": "HTTP_REQUEST",
+      "http_method": "GET",
+      "severity_min": "BENIGN"
+    }
+  },
+  {
+    "_comment": "Suspicious: path traversal",
+    "raw_log": "{\"timestamp\":\"2026-05-07T14:10:00Z\",\"source_ip\":\"198.51.100.10\",\"dest_ip\":\"10.0.0.80\",\"dest_port\":80,\"method\":\"GET\",\"url\":\"/../../etc/passwd\",\"status_code\":403,\"user_agent\":\"curl/7.68\",\"bytes_sent\":0,\"bytes_received\":0}",
+    "expected": {
+      "event_type": "HTTP_REQUEST",
+      "http_url": "/../../etc/passwd"
+    }
+  },
+  {
+    "_comment": "Suspicious: large POST body (possible exfiltration)",
+    "raw_log": "{\"timestamp\":\"2026-05-07T14:15:00Z\",\"source_ip\":\"10.0.0.50\",\"dest_ip\":\"203.0.113.99\",\"dest_port\":443,\"method\":\"POST\",\"url\":\"/upload\",\"status_code\":200,\"user_agent\":\"Python-urllib/3.10\",\"bytes_sent\":5242880,\"bytes_received\":128}",
+    "expected": {
+      "event_type": "HTTP_REQUEST",
+      "http_method": "POST",
+      "bytes_sent": 5242880
+    }
+  },
+  {
+    "_comment": "Malformed: missing URL",
+    "raw_log": "{\"timestamp\":\"2026-05-07T14:20:00Z\",\"source_ip\":\"10.0.0.10\",\"method\":\"GET\"}",
+    "expected": {
+      "event_type": "HTTP_REQUEST",
+      "is_malformed": true
+    }
+  }
+]
