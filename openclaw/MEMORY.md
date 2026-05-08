@@ -11,7 +11,7 @@
 - **Config file:** `openclaw/config/threat_lists.yaml`
 
 ## Service Endpoints (Credential Vault)
-- **Ingestion Queue API:** `http://localhost:8002` (Python FastAPI)
+- **Ingestion Queue API:** `http://localhost:8000` (Python FastAPI)
 - **Embedding Service:** `http://localhost:8001` (Python FastAPI + CUDA)
 - **Correlation Service:** `http://localhost:8003` (Python FastAPI + ChromaDB)
 - **Synthesizer Service:** `http://localhost:8004` (Python FastAPI + Ollama)
