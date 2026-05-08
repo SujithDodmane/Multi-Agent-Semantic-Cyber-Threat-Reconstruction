@@ -217,12 +217,7 @@ async def synthesize(request: SynthesizeRequest):
             try:
                 logger.info(f"🧠 [SYNTHESIS] Attempt {attempt}/{MAX_RETRIES} — Reconstructing attack timeline (temp={temp})")
                 
-                # DEBUG PRINT
-                print(f"\n--- DEBUG SYSTEM PROMPT ---\n{system_prompt}\n--- END DEBUG ---\n")
-                
                 raw_response = await _call_ollama(system_prompt, user_prompt, temp)
-                
-                print(f"\n--- DEBUG RAW RESPONSE ---\n{raw_response}\n--- END DEBUG ---\n")
     
                 # Robust JSON extraction: Handle multiple blocks and find the one with data
                 clean_json = raw_response.strip()
