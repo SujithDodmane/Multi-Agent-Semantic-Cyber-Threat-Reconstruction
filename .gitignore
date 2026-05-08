@@ -42,6 +42,13 @@ logs/*.json
 *.swp
 *.swo
 
+# --- Temporary Test Scripts & Logs ---
+tests/test_*.py
+tests/**/*.log
+!tests/mixed_realworld_scenario.log
+!tests/aegis_threat_scenario.log
+data/temp/
+
 # --- Docker ---
 docker-compose.override.yml
 

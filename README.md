@@ -2,6 +2,14 @@
 
 > Fully offline, edge-deployed autonomous SOC analyst platform.
 
+---
+
+### 🎥 Demonstration & Presentation
+- **Video Walkthrough**: [Watch the AEGIS Demo](https://drive.google.com/file/d/1eGgH9Qf1WejvmMY0vBLBosxPNV1fMPz3/view?usp=sharing)
+- **Presentation Slides**: [View the Project PPT](https://docs.google.com/presentation/d/1yBRTbUo5tyi5gW6mOIO-1PfxrYami5he/edit?usp=sharing&ouid=105938844617032692325&rtpof=true&sd=true)
+
+---
+
 AEGIS (Multi-Agent Semantic Threat Evaluation & Reconstruction) is a state-of-the-art cybersecurity platform designed to automate the forensic reconstruction of cyber attacks. Unlike traditional SIEMs that produce isolated alerts, AEGIS uses a multi-agent orchestration framework to correlate semantic "intents" across time and space, producing a unified forensic story.
 
 ---
@@ -11,7 +19,7 @@ AEGIS (Multi-Agent Semantic Threat Evaluation & Reconstruction) is a state-of-th
 AEGIS operates as a four-plane microservice architecture, as detailed in the [Implementation Methodology](docs/methodology_reference.txt):
 
 1.  **Plane 1: Ingestion & Normalization**: Real-time log tailing, greedy normalization, and "Synthetic Intent" translation.
-2.  **Plane 2: OpenClaw Orchestration**: A Node.js heartbeat loop managing independent agents (Triage, Correlation, Timeline) via shared Cognitive RAM.
+2.  **Plane 2: OpenClaw Orchestration**: A Node.js heartbeat loop managing independent agents. We have developed custom **`SKILL.md`** logic for each agent (Triage, Correlation, Timeline) to define their specific forensic expertise.
 3.  **Plane 3: Semantic Reasoning**: CUDA-accelerated BGE-m3 embeddings and ChromaDB vector search to find behavioral links across a temporal window.
 4.  **Plane 4: Output & Visualization**: Real-time 3D Knowledge Graph projection and LLM-synthesized forensic reports delivered via Telegram.
 
@@ -143,7 +151,7 @@ You can tune the automated scoring in `openclaw/config/threat_lists.yaml` to add
 ## 📂 Project Structure
 
 *   `ingestion/`: Log tailing, greedy normalization, and intent translation.
-*   `openclaw/`: Node.js agents, Heartbeat loop, and SKILL definitions.
+*   `openclaw/`: Node.js agents, Heartbeat loop, and **custom `SKILL.md` definitions**.
 *   `services/`: FastAPI services for embedding, correlation, and graph projection.
 *   `tests/`: Real-world attack scenarios and unit tests.
 *   `scripts/`: Automation scripts for launching, stopping, and injecting logs.
