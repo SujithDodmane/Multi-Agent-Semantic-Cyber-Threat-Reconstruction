@@ -11,6 +11,12 @@ let Graph;
 const graphData = { nodes: [], links: [] };
 const nodeById = new Map();
 
+function getColorForScore(score) {
+    if (score > 60) return '#e74c3c'; // High - Red
+    if (score > 30) return '#f1c40f'; // Medium - Yellow
+    return '#3498db'; // Low - Blue
+}
+
 function initGraph() {
     const container = document.getElementById('3d-graph');
     if (!container) return;
@@ -26,45 +32,91 @@ function initGraph() {
         .showNavInfo(false)
         .nodeLabel(node => `
             <div style="padding: 8px; background: rgba(10, 15, 30, 0.9); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px;">
-                <b style="color: ${node.color}">${node.label}</b><br/>
+                <b style="color: ${getColorForScore(node.threat_score)}">${node.label}</b><br/>
                 <span style="font-size: 10px; color: #aaa;">${node.type.toUpperCase()} | Score: ${node.threat_score}</span>
             </div>
         `)
-        .nodeAutoColorBy('type')
-        .linkDirectionalParticles(2)
-        .linkDirectionalParticleSpeed(d => d.value * 0.005)
+        .nodeColor(node => getColorForScore(node.threat_score))
         .nodeThreeObject(node => {
-        // Create custom 3D geometries based on node type
-        let geometry;
-        switch(node.type) {
-            case 'ip': geometry = new THREE.SphereGeometry(5); break;
-            case 'hostname': geometry = new THREE.BoxGeometry(8, 8, 8); break;
-            case 'process': geometry = new THREE.OctahedronGeometry(6); break;
-            case 'user': geometry = new THREE.ConeGeometry(5, 10); break;
-            default: geometry = new THREE.DodecahedronGeometry(5);
-        }
-        
-        const material = new THREE.MeshPhongMaterial({
-            color: node.color || '#3498db',
-            transparent: true,
-            opacity: 0.9,
-            shininess: 100,
-            emissive: node.color || '#3498db',
-            emissiveIntensity: node.threat_score > 60 ? 1.5 : 0.5
-        });
-        
-        return new THREE.Mesh(geometry, material);
-    })
-    .onNodeClick(node => {
-        showDetailPanel(node);
-    })
-    .onBackgroundClick(() => {
-        document.getElementById('detail-panel').classList.add('hidden');
-    });
+            const color = getColorForScore(node.threat_score);
+            let geometry;
+            switch(node.type) {
+                case 'ip': geometry = new THREE.SphereGeometry(5); break;
+                case 'hostname': geometry = new THREE.BoxGeometry(8, 8, 8); break;
+                case 'process': geometry = new THREE.OctahedronGeometry(6); break;
+                case 'user': geometry = new THREE.ConeGeometry(5, 10); break;
+                default: geometry = new THREE.DodecahedronGeometry(5);
+            }
+            
+            const material = new THREE.MeshPhongMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.9,
+                shininess: 100,
+                emissive: color,
+                emissiveIntensity: node.threat_score > 60 ? 1.5 : 0.5
+            });
+            
+            const mesh = new THREE.Mesh(geometry, material);
 
-// Force config
-Graph.d3Force('link').distance(100);
-Graph.d3Force('charge').strength(-150);
+            // Use a simple sprite for the label to avoid external library issues if possible
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 256;
+            canvas.height = 64;
+            context.font = 'Bold 24px Outfit';
+            context.fillStyle = 'white';
+            context.textAlign = 'center';
+            context.fillText(node.label, 128, 40);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(20, 5, 1);
+            sprite.position.y = 12;
+            mesh.add(sprite);
+
+            return mesh;
+        })
+        .linkThreeObjectExtend(true)
+        .linkThreeObject(link => {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 256;
+            canvas.height = 64;
+            context.font = '18px Outfit';
+            context.fillStyle = '#7f8c8d';
+            context.textAlign = 'center';
+            context.fillText(link.label || '', 128, 40);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(15, 3.75, 1);
+            return sprite;
+        })
+        .linkPositionUpdate((sprite, { start, end }) => {
+            const middlePos = Object.assign(...['x', 'y', 'z'].map(c => ({
+                [c]: start[c] + (end[c] - start[c]) / 2
+            })));
+            Object.assign(sprite.position, middlePos);
+        })
+        .linkDirectionalParticles(2)
+        .linkDirectionalParticleWidth(2.0)
+        .linkDirectionalParticleSpeed(0.001)
+        .onNodeClick(node => {
+            showDetailPanel(node);
+        })
+        .onBackgroundClick(() => {
+            document.getElementById('detail-panel').classList.add('hidden');
+        });
+
+    Graph.d3AlphaDecay(0.01);
+    Graph.d3VelocityDecay(0.3);
+    Graph.cooldownTime(5000);
+    Graph.d3Force('link').distance(100);
+    Graph.d3Force('charge').strength(-150);
+}
 
 // ─── WebSocket Connection ─────────────────────────────────────────────────
 
@@ -155,6 +207,15 @@ function handleDelta(data) {
         if (existing) {
             Object.assign(existing, n.data);
             changed = true;
+            
+            // Update 3D object color and label if needed
+            const mesh = existing.__threeObj;
+            if (mesh) {
+                const color = getColorForScore(existing.threat_score);
+                mesh.material.color.set(color);
+                mesh.material.emissive.set(color);
+                mesh.material.emissiveIntensity = existing.threat_score > 60 ? 1.5 : 0.5;
+            }
         }
     });
 
@@ -175,6 +236,8 @@ function handleDelta(data) {
 
     if (changed) {
         Graph.graphData(graphData);
+        // Force color and object refresh
+        Graph.nodeColor(Graph.nodeColor());
         updateStats(data.total_nodes || graphData.nodes.length, data.total_edges || graphData.links.length);
         updateVitals(data);
     }
@@ -242,7 +305,7 @@ function showDetailPanel(node) {
         </div>
         <div class="vital-item" style="margin-bottom:15px">
             <label>THREAT SCORE</label>
-            <div class="vital-value" style="color:${node.color}">${node.threat_score}</div>
+            <div class="vital-value" style="color:${getColorForScore(node.threat_score)}">${node.threat_score}</div>
         </div>
         <div class="vital-item">
             <label>FIRST IDENTIFIED</label>
@@ -273,5 +336,9 @@ document.getElementById('detail-close').addEventListener('click', () => {
 
 // ─── Start ───────────────────────────────────────────────────────────────
 
+initGraph();
 connectWebSocket();
-Graph.cameraPosition({ x: 0, y: 0, z: 1000 });
+// Give time for layout to settle before initial zoom
+setTimeout(() => {
+    if (Graph) Graph.cameraPosition({ x: 0, y: 0, z: 1000 }, { x: 0, y: 0, z: 0 }, 2000);
+}, 2000);

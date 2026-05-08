@@ -136,6 +136,29 @@ async def _get_embedding(text: str) -> Optional[list[float]]:
 # ─── ChromaDB Query ────────────────────────────────────────────────────────
 
 
+# ─── ChromaDB Client Singleton ─────────────────────────────────────────────
+import chromadb
+_chroma_client = None
+
+def get_chroma_client():
+    global _chroma_client
+    if _chroma_client is None:
+        _chroma_client = chromadb.PersistentClient(path=CHROMADB_PERSIST_DIR)
+    return _chroma_client
+
+def get_active_collection():
+    client = get_chroma_client()
+    return client.get_or_create_collection(
+        name=ACTIVE_COLLECTION,
+        metadata={
+            "hnsw:construction_ef": HNSW_EF_CONSTRUCTION,
+            "hnsw:M": HNSW_M,
+        },
+    )
+
+# ─── ChromaDB Query ────────────────────────────────────────────────────────
+
+
 async def _query_chromadb(
     embedding: list[float],
     event_timestamp: float,
@@ -144,32 +167,13 @@ async def _query_chromadb(
 ) -> list[dict]:
     """
     Query ChromaDB with temporal pre-filter.
-
-    Ref: Methodology §3.3:
-    - "event_timestamp must be between (target - 7200) and (target + 7200)"
-    - "This filter is applied before the HNSW nearest-neighbor search, not after"
-    - "ChromaDB evaluates metadata filters as pre-filters"
-
-    Ref: Methodology §3.2:
-    - "HNSW index parameters: ef_construction=200, M=48"
     """
     window_seconds = temporal_window
     ts_min = event_timestamp - window_seconds
     ts_max = event_timestamp + window_seconds
 
     try:
-        # Use ChromaDB Persistent client
-        import chromadb
-        client = chromadb.PersistentClient(path=CHROMADB_PERSIST_DIR)
-
-        # Get or create collection with correct HNSW params
-        collection = client.get_or_create_collection(
-            name=ACTIVE_COLLECTION,
-            metadata={
-                "hnsw:construction_ef": HNSW_EF_CONSTRUCTION,
-                "hnsw:M": HNSW_M,
-            },
-        )
+        collection = get_active_collection()
 
         if collection.count() == 0:
             logger.info("ChromaDB collection is empty — cold start")
@@ -239,15 +243,7 @@ async def _store_in_chromadb(embedding: list[float], synthetic_intent: str, log_
     Ref: Methodology §3.1 — "Every ingested log... must be embedded and stored in the ChromaDB vector space"
     """
     try:
-        import chromadb
-        client = chromadb.PersistentClient(path=CHROMADB_PERSIST_DIR)
-        collection = client.get_or_create_collection(
-            name=ACTIVE_COLLECTION,
-            metadata={
-                "hnsw:construction_ef": 200,
-                "hnsw:M": HNSW_M,
-            },
-        )
+        collection = get_active_collection()
         
         collection.add(
             ids=[log_uuid],

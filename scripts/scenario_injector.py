@@ -1,6 +1,7 @@
 import time
 import json
 import os
+import random
 import sys
 import io
 
@@ -74,17 +75,17 @@ def inject():
     print("\n--- Injection Complete ---")
 
 def process_batch(batch, phase_name):
-    # Reduce load: If it's a large batch of benign logs, sample them
-    if "BENIGN" in phase_name.upper() and len(batch) > 10:
-        batch = batch[::3] # Take every 3rd benign log
-        print(f" 🧪 Sampling benign batch (Reduced to {len(batch)} logs)")
-
     print(f" 📥 Ingesting {len(batch)} logs into pipeline...")
     with open(OUTPUT_FILE, "a") as f:
-        for line in batch:
-            f.write(line + "\n")
+        for log_data in batch:
+            # More aggressive sampling for benign logs to keep graph snappy
+            if "BENIGN" in phase_name.upper() and random.random() > 0.05: # Only 5% of benign logs
+                continue
+                
+            # Attack phases: ingestion every 0.8s
+            f.write(log_data + "\n")
             f.flush()
-            time.sleep(0.8) # Increased delay significantly to reduce RAM pressure
+            time.sleep(0.8) 
     time.sleep(5) # Wait longer for processing
 
 if __name__ == "__main__":

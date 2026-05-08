@@ -404,7 +404,7 @@ async function processEntry(entry) {
         event_timestamp: Date.now() / 1000,
         log_uuid: logUuid,
         event_type: entry.event_type,
-      });
+      }, 120000);
 
       recordSuccess('correlation');
       if (corrResult.cluster_size > 1) {
@@ -448,7 +448,7 @@ async function processEntry(entry) {
         mitre_technique_hint: e.mitre_technique_hint || null,
       })),
       cold_start: timelineContext.correlation.cold_start || false,
-    });
+    }, 600000); // 10 minute timeout for LLM queue
 
     recordSuccess('synthesizer');
 
