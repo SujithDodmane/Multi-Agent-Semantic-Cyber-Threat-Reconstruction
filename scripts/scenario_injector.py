@@ -18,7 +18,7 @@ YELLOW = "\033[93m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
 
-SCENARIO_FILE = "tests/aegis_threat_scenario.log"
+SCENARIO_FILE = "tests/mixed_realworld_scenario.log"
 OUTPUT_DIR = "logs"
 OUTPUT_FILE = "logs/scenario.log"
 

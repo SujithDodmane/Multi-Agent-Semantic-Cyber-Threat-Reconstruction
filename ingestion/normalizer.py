@@ -310,17 +310,33 @@ def normalize_unknown(parsed: dict[str, Any], raw_line: str) -> NormalizedLogEnt
     """
     Fallback normalization for unidentified log types.
     Extracts what it can and marks event_type as UNKNOWN.
+    Greedy extraction: if the field name matches our schema, take it.
     """
+    # Try to map event_type if present in string
+    event_type_str = parsed.get("event_type", "UNKNOWN").upper()
+    try:
+        event_type = EventType(event_type_str)
+    except ValueError:
+        event_type = EventType.UNKNOWN
+
     return NormalizedLogEntry(
         log_uuid=str(uuid.uuid4()),
         ingestion_timestamp=_now_iso(),
-        event_timestamp=_parse_timestamp(parsed, ["timestamp", "ts", "@timestamp", "time", "date"]),
-        event_type=EventType.UNKNOWN,
+        event_timestamp=_parse_timestamp(parsed, ["timestamp", "ts", "@timestamp", "time", "date", "event_timestamp"]),
+        event_type=event_type,
         hostname=str(parsed.get("hostname", parsed.get("host", parsed.get("Computer", "unknown")))),
         sha256_hash=_sha256(raw_line),
         raw_payload=raw_line,
-        source_ip=_safe_str(parsed.get("src_ip", parsed.get("source_ip", parsed.get("src")))),
-        dest_ip=_safe_str(parsed.get("dst_ip", parsed.get("dest_ip", parsed.get("dst")))),
+        source_ip=_safe_str(parsed.get("source_ip", parsed.get("src_ip", parsed.get("src")))),
+        dest_ip=_safe_str(parsed.get("dest_ip", parsed.get("dst_ip", parsed.get("dst")))),
+        source_port=_safe_int(parsed.get("source_port", parsed.get("src_port"))),
+        dest_port=_safe_int(parsed.get("dest_port", parsed.get("dst_port"))),
+        process_name=_safe_str(parsed.get("process_name", parsed.get("process.name", parsed.get("Image")))),
+        parent_process_name=_safe_str(parsed.get("parent_process_name", parsed.get("ParentImage"))),
+        user_account=_safe_str(parsed.get("user_account", parsed.get("User", parsed.get("user.name")))),
+        file_path=_safe_str(parsed.get("file_path", parsed.get("TargetFilename"))),
+        command_line_args=_safe_str(parsed.get("command_line_args", parsed.get("CommandLine"))),
+        synthetic_intent=_safe_str(parsed.get("synthetic_intent")),
     )
 
 

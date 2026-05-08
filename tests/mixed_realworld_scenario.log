@@ -1,0 +1,30 @@
+# === PHASE 0: BENIGN BASELINE ===
+{"raw_line": "127.0.0.1 - - [08/May/2026:09:00:01] \"GET /index.php HTTP/1.1\" 200 4523", "event_type": "HTTP_REQUEST", "hostname": "WEBSERVER01", "http_url": "/index.php", "http_method": "GET"}
+{"raw_line": "User jsmith logged in successfully from 10.0.0.50", "event_type": "AUTHENTICATION_SUCCESS", "hostname": "WEBSERVER01", "user_account": "jsmith", "source_ip": "10.0.0.50"}
+{"raw_line": "Windows Update service (wuauserv) started", "event_type": "SERVICE_INSTALL", "hostname": "FILESERVER01", "process_name": "svchost.exe"}
+{"raw_line": "127.0.0.1 - - [08/May/2026:09:15:22] \"GET /api/status HTTP/1.1\" 200 120", "event_type": "HTTP_REQUEST", "hostname": "WEBSERVER01", "http_url": "/api/status"}
+{"raw_line": "Process created: C:\\Windows\\System32\\svchost.exe (PID: 1234)", "event_type": "PROCESS_CREATION", "hostname": "WEBSERVER01", "process_name": "svchost.exe"}
+
+# === PHASE 1: INITIAL ACCESS (SQLi + Web Shell) ===
+{"raw_line": "127.0.0.1 - - [08/May/2026:09:45:10] \"POST /upload.aspx?id=1' OR 1=1-- HTTP/1.1\" 500 0", "event_type": "HTTP_REQUEST", "hostname": "WEBSERVER01", "http_url": "/upload.aspx", "http_method": "POST", "synthetic_intent": "SQL injection attempt on upload handler"}
+{"raw_line": "Process created: C:\\Windows\\System32\\cmd.exe (PID: 5566) spawned by w3wp.exe", "event_type": "PROCESS_CREATION", "hostname": "WEBSERVER01", "process_name": "cmd.exe", "parent_process_name": "w3wp.exe", "synthetic_intent": "Web server spawning command shell (possible web shell execution)"}
+{"raw_line": "File created: C:\\inetpub\\wwwroot\\shell.aspx", "event_type": "FILE_WRITE", "hostname": "WEBSERVER01", "file_path": "C:\\inetpub\\wwwroot\\shell.aspx", "synthetic_intent": "Web shell uploaded to web root"}
+
+# === PHASE 2: RECONNAISSANCE & C2 ===
+{"raw_line": "Process created: whoami.exe /priv", "event_type": "PROCESS_CREATION", "hostname": "WEBSERVER01", "process_name": "whoami.exe", "command_line_args": "/priv", "synthetic_intent": "Attacker checking privileges"}
+{"raw_line": "Network connection: 10.10.2.10 -> 185.220.101.45:4444 (Unusual Port)", "event_type": "NETWORK_CONNECTION", "hostname": "WEBSERVER01", "dest_ip": "185.220.101.45", "dest_port": 4444, "synthetic_intent": "Reverse shell connection to C2 server"}
+
+# === PHASE 3: LATERAL MOVEMENT & CREDENTIAL THEFT ===
+{"raw_line": "Process created: psexec.exe \\\\FILESERVER01 -u SYSTEM cmd.exe", "event_type": "PROCESS_CREATION", "hostname": "WEBSERVER01", "process_name": "psexec.exe", "command_line_args": "\\\\FILESERVER01 -u SYSTEM", "synthetic_intent": "Lateral movement to FileServer using PsExec"}
+{"raw_line": "User NT AUTHORITY\\SYSTEM logged in on FILESERVER01 via PsExec", "event_type": "AUTHENTICATION_SUCCESS", "hostname": "FILESERVER01", "user_account": "SYSTEM", "synthetic_intent": "Successful lateral movement"}
+{"raw_line": "Process created: mimikatz.exe privilege::debug sekurlsa::logonpasswords", "event_type": "PROCESS_CREATION", "hostname": "FILESERVER01", "process_name": "mimikatz.exe", "command_line_args": "privilege::debug sekurlsa::logonpasswords", "synthetic_intent": "Credential dumping using Mimikatz"}
+{"raw_line": "File written: C:\\Windows\\Temp\\passwords.txt", "event_type": "FILE_WRITE", "hostname": "FILESERVER01", "file_path": "C:\\Windows\\Temp\\passwords.txt", "synthetic_intent": "Exfiltrated credentials saved to temp file"}
+
+# === PHASE 4: EXFILTRATION & IMPACT ===
+{"raw_line": "Process created: 7z.exe a -pP4ssw0rd! exfil.zip D:\\Finances\\*", "event_type": "PROCESS_CREATION", "hostname": "FILESERVER01", "process_name": "7z.exe", "command_line_args": "a -pP4ssw0rd! exfil.zip D:\\Finances\\*", "synthetic_intent": "Sensitive financial data being compressed for exfiltration"}
+{"raw_line": "Network connection: 10.10.2.20 -> 93.184.216.34:443 (High Volume)", "event_type": "NETWORK_CONNECTION", "hostname": "FILESERVER01", "dest_ip": "93.184.216.34", "dest_port": 443, "synthetic_intent": "Data exfiltration via encrypted channel"}
+{"raw_line": "Security event log cleared on WEBSERVER01 by SYSTEM", "event_type": "EXFILTRATION_HINT", "hostname": "WEBSERVER01", "process_name": "wevtutil.exe", "synthetic_intent": "Evidence destruction: cleaning logs to cover tracks"}
+{"raw_line": "Process created: crypt0r.exe --encrypt --target D:\\", "event_type": "PROCESS_CREATION", "hostname": "FILESERVER01", "process_name": "crypt0r.exe", "command_line_args": "--encrypt --target D:\\", "synthetic_intent": "Ransomware execution: encrypting financial data"}
+
+# === PHASE 5: POST-MORTEM NOISE ===
+{"raw_line": "127.0.0.1 - - [08/May/2026:12:00:01] \"GET /favicon.ico HTTP/1.1\" 404 0", "event_type": "HTTP_REQUEST", "hostname": "WEBSERVER01", "http_url": "/favicon.ico"}
