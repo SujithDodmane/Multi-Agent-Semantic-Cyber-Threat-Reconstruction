@@ -95,6 +95,10 @@ class NormalizedLogEntry(BaseModel):
         default=None,
         description="MITRE ATT&CK technique ID hint from intent translation",
     )
+    severity_hint: Optional[Severity] = Field(
+        default=None,
+        description="Optional manual severity override (P0, P1, P2)",
+    )
 
     def get_field_safe(self, field_name: str, default: str = "unknown") -> str:
         """

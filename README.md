@@ -114,6 +114,32 @@ python scripts/scenario_injector.py
 
 ---
 
+## 🧩 Integrating Your Own Logs
+
+AEGIS is designed to be highly extensible. You can feed your own JSON logs into the system to test its reconstruction capabilities.
+
+### 1. Feeding Custom Logs
+Simply create a `.log` or `.json` file in the `./logs` directory. AEGIS's greedy normalizer will automatically pick up any fields that match our schema (e.g., `source_ip`, `process_name`, `user_account`).
+
+### 2. Manual Severity Hinting
+If you want to ensure a specific log entry is prioritized as a critical threat, you can include a `severity` or `priority` field in your JSON:
+```json
+{
+  "hostname": "MY-LAPTOP",
+  "event_type": "PROCESS_CREATION",
+  "process_name": "unknown_tool.exe",
+  "severity": "P0"
+}
+```
+*   **P0 (Critical)**: Triggers immediate tactical alerts and full semantic correlation.
+*   **P1 (High)**: Triggers full semantic correlation and forensic synthesis.
+*   **P2 (Medium)**: Generates a forensic report but skips correlation unless linked by a P0/P1 event.
+
+### 3. Tuning Triage Logic
+You can tune the automated scoring in `openclaw/config/threat_lists.yaml` to add your own dangerous processes or ports without changing any code.
+
+---
+
 ## 📂 Project Structure
 
 *   `ingestion/`: Log tailing, greedy normalization, and intent translation.

@@ -337,6 +337,7 @@ def normalize_unknown(parsed: dict[str, Any], raw_line: str) -> NormalizedLogEnt
         file_path=_safe_str(parsed.get("file_path", parsed.get("TargetFilename"))),
         command_line_args=_safe_str(parsed.get("command_line_args", parsed.get("CommandLine"))),
         synthetic_intent=_safe_str(parsed.get("synthetic_intent")),
+        severity_hint=_safe_str(parsed.get("severity", parsed.get("priority", parsed.get("severity_hint")))),
     )
 
 

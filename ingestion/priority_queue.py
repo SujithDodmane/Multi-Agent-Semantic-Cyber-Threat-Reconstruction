@@ -125,6 +125,11 @@ def compute_severity(entry: NormalizedLogEntry) -> tuple[Severity, int]:
     if event_type == EventType.FILE_WRITE and entry.synthetic_intent and "system directory" in entry.synthetic_intent:
         return Severity.P2, 2
 
+    # --- Manual Override ---
+    if entry.severity_hint:
+        p_map = {Severity.P0: 0, Severity.P1: 1, Severity.P2: 2, Severity.BENIGN: 3}
+        return entry.severity_hint, p_map.get(entry.severity_hint, 2)
+
     # BENIGN — lowest priority, queued for storage context only
     return Severity.BENIGN, 3
 
